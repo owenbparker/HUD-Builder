@@ -15,11 +15,12 @@ icon = os.path.join(root, "packaging", "icon.ico")
 
 hidden, datas = [], [(os.path.join(root, "web"), "web")]
 binaries = []
-# The PSD reader (Design > Import .psd) and its data files.
-d, b, h = collect_all("psd_tools")
-datas += d
-binaries += b
-hidden += h
+# The PSD reader (Design > Import .psd) and zstandard (Figma files, Import .fig).
+for package in ("psd_tools", "zstandard"):
+    d, b, h = collect_all(package)
+    datas += d
+    binaries += b
+    hidden += h
 if sys.platform == "win32":
     # pywebview's Windows window (Edge WebView2) is loaded at runtime.
     hidden += ["webview.platforms.winforms", "webview.platforms.edgechromium", "clr"]

@@ -2,3 +2,5 @@
 pywebview
 # Reading Photoshop files (Design > Import .psd)
 psd-tools
+# Reading Figma files (Design > Import .fig)
+zstandard

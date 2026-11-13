@@ -28,7 +28,7 @@
   <!-- My HUDs -->
   <section class="page" data-page="huds">
     <div class="page-head"><h2>My HUDs</h2><span class="grow"></span>
-      <button id="import-btn" title="A HUD (.scchud), a GFX Engine graphic (.sccgfx) or a Photoshop file (.psd)">Import…</button><input type="file" id="import-file" accept=".scchud,.sccgfx,.psd,.psb,.zip" hidden>
+      <button id="import-btn" title="A HUD (.scchud), a GFX Engine graphic (.sccgfx), a Photoshop file (.psd) or a Figma file (.fig)">Import…</button><input type="file" id="import-file" accept=".scchud,.sccgfx,.psd,.psb,.fig,.zip" hidden>
       <button class="primary" id="new-btn">New HUD</button></div>
     <div id="hud-grid" class="hud-grid"></div>
   </section>
@@ -53,8 +53,8 @@
         <input type="file" id="ed-file" accept="image/*,video/webm,video/mp4,.json,.ttf,.otf,.woff,.woff2" multiple hidden>
       </div>
       <span class="sep"></span>
-      <button id="ed-import" title="Bring in a GFX Engine graphic (.sccgfx) or a Photoshop file (.psd): its layers are added to this HUD">Import .sccgfx / .psd</button>
-      <input type="file" id="ed-import-file" accept=".sccgfx,.psd,.psb,.zip" hidden>
+      <button id="ed-import" title="Bring in a GFX Engine graphic (.sccgfx), a Photoshop file (.psd) or a Figma file (.fig): its layers are added to this HUD">Import design…</button>
+      <input type="file" id="ed-import-file" accept=".sccgfx,.psd,.psb,.fig,.zip" hidden>
       <span class="grow"></span>
       <select id="ed-bg" aria-label="Canvas background"><option value="checker">Checkerboard</option><option value="black">Black</option><option value="green">Green</option><option value="grey">Grey</option></select>
       <button id="ed-play" title="Play the In animations, then the Out">▶</button>

@@ -28,11 +28,15 @@ The app checks for updates when it starts.
      outline and a shadow or glow. Pictures can be cut to a circle, a rounded
      box or an angle.
    - Each layer has In and Out animations (▶ Play shows them).
-   - **Import .sccgfx / .psd** (or drop one on the canvas) brings in a GFX
-     Engine graphic or a Photoshop file as layers: Photoshop text stays
-     editable text, other layers become pictures, a GFX Engine field becomes
-     a HUD variable, and 4K designs are scaled to 1920 × 1080. Fonts the
-     design uses but HUD Builder doesn't have are listed to add.
+   - **Import design…** (or drop a file on the canvas) brings in a GFX
+     Engine graphic (.sccgfx), a Photoshop file (.psd) or a Figma file
+     (.fig, from Figma's File → Save local copy) as layers. Text stays
+     editable text; Figma rectangles and ellipses stay shapes, its pictures
+     come in cropped as they show and its vector shapes as SVG pictures;
+     other Photoshop layers become pictures; a GFX Engine field becomes a HUD
+     variable. 4K designs are scaled to 1920 × 1080, and each Figma frame is
+     a group (the first shown). Fonts the design uses but HUD Builder doesn't
+     have are listed to add.
 3. **Variables** are what you change during the show: a score, a team name, a
    colour, a picture, an on / off switch. Make one with the **+** next to
    Variables, then drag it onto the canvas (it makes the right layer) or onto
@@ -53,7 +57,7 @@ The app checks for updates when it starts.
 
 **Export .scchud** (Go live) saves a HUD with its pictures and fonts as one
 file; **Import** on My HUDs opens it, on this PC or another. Import on My
-HUDs also takes a .sccgfx or .psd, as a new HUD.
+HUDs also takes a .sccgfx, .psd or .fig, as a new HUD.
 
 ## Where things are
 

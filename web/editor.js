@@ -432,7 +432,7 @@ window.Editor = (function () {
 
   // A GFX Engine graphic or a Photoshop file: its layers (and a graphic's
   // fields, as variables) added to this HUD, as a group, in one undo step.
-  const DESIGN = /\.(sccgfx|psd|psb|zip)$/i;
+  const DESIGN = /\.(sccgfx|psd|psb|fig|zip)$/i;
   async function importDesign(file) {
     if (!hud) return toast("Open a HUD first", true);
     const b = $("#ed-import");
@@ -930,7 +930,7 @@ window.Editor = (function () {
       h("div", { class: "props-head" }, h("h3", {}, hud.name), h("span", { class: "muted" }, games[hud.game] || "")),
       sect(null, h("p", { class: "muted" }, "Click a layer to change it. Shift or Ctrl+click picks more; drag on empty canvas to pick an area."),
         h("ul", { class: "keys muted small" },
-          h("li", {}, "Drag pictures, videos, Lottie files, fonts, GFX Engine graphics (.sccgfx) and Photoshop files (.psd) in from your PC"),
+          h("li", {}, "Drag pictures, videos, Lottie files, fonts, GFX Engine graphics (.sccgfx), Photoshop (.psd) and Figma (.fig) files in from your PC"),
           h("li", {}, "Arrow keys nudge (Shift: 10 px); Alt while dragging turns off snapping"),
           h("li", {}, "Ctrl+G groups, Ctrl+Shift+G ungroups; Alt+click picks one layer in a group"),
           h("li", {}, "Ctrl+D duplicates, Ctrl+] / Ctrl+[ bring forward / send back"),

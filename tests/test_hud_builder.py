@@ -27,6 +27,120 @@ PNG = (b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08
        b"\x00\x00\x00\rIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82")
 
 
+
+# --- a small Figma file, written with a kiwi encoder ---------------------------------------------
+def _fig_file():
+    import struct
+    import zlib
+
+    def uint(v):
+        out = bytearray()
+        while True:
+            b = v & 127
+            v >>= 7
+            out.append(b | (128 if v else 0))
+            if not v:
+                return bytes(out)
+
+    def sint(v):
+        return uint((v << 1) ^ (v >> 63) if v < 0 else v << 1)
+
+    def flt(v):
+        bits = struct.unpack("<I", struct.pack("<f", v))[0]
+        bits = ((bits >> 23) | (bits << 9)) & 0xFFFFFFFF
+        return b"\0" if bits & 255 == 0 else struct.pack("<I", bits)
+
+    def cstr(t):
+        return t.encode() + b"\0"
+
+    BUILTIN = {"bool": -1, "byte": -2, "int": -3, "uint": -4, "float": -5, "string": -6}
+    defs = [
+        ("NodeType", 0, [("DOCUMENT", 0), ("CANVAS", 1), ("FRAME", 2), ("ROUNDED_RECTANGLE", 3), ("TEXT", 4), ("VECTOR", 5)]),
+        ("PaintType", 0, [("SOLID", 0), ("IMAGE", 1)]),
+        ("GUID", 1, [("sessionID", "uint"), ("localID", "uint")]),
+        ("Color", 1, [("r", "float"), ("g", "float"), ("b", "float"), ("a", "float")]),
+        ("Vector", 1, [("x", "float"), ("y", "float")]),
+        ("Matrix", 1, [("m00", "float"), ("m01", "float"), ("m02", "float"), ("m10", "float"), ("m11", "float"), ("m12", "float")]),
+        ("ParentIndex", 2, [("guid", "GUID"), ("position", "string")]),
+        ("Paint", 2, [("type", "PaintType"), ("color", "Color"), ("opacity", "float"), ("visible", "bool")]),
+        ("TextData", 2, [("characters", "string")]),
+        ("FontName", 2, [("family", "string"), ("style", "string"), ("postscript", "string")]),
+        ("Path", 2, [("commandsBlob", "uint")]),
+        ("NodeChange", 2, [("guid", "GUID"), ("parentIndex", "ParentIndex"), ("type", "NodeType"), ("name", "string"),
+                           ("visible", "bool"), ("opacity", "float"), ("size", "Vector"), ("transform", "Matrix"),
+                           ("fillPaints", "Paint[]"), ("cornerRadius", "float"), ("textData", "TextData"),
+                           ("fontName", "FontName"), ("fontSize", "float"), ("fillGeometry", "Path[]")]),
+        ("Blob", 2, [("bytes", "byte[]")]),
+        ("Message", 2, [("nodeChanges", "NodeChange[]"), ("blobs", "Blob[]")]),
+    ]
+    index = {d[0]: i for i, d in enumerate(defs)}
+
+    def ftype(t):
+        t = t.rstrip("[]")
+        return BUILTIN[t] if t in BUILTIN else index[t]
+
+    sch = bytearray(uint(len(defs)))
+    for name, kind, fields in defs:
+        sch += cstr(name) + bytes([kind]) + uint(len(fields))
+        for i, (fname, t) in enumerate(fields):
+            if kind == 0:
+                sch += cstr(fname) + sint(0) + b"\0" + uint(t)
+            else:
+                sch += cstr(fname) + sint(ftype(t)) + bytes([t.endswith("[]")]) + uint(i + 1)
+
+    def enc(t, v):
+        if t.endswith("[]"):
+            if t == "byte[]":
+                return uint(len(v)) + v
+            return uint(len(v)) + b"".join(enc(t[:-2], x) for x in v)
+        if t in BUILTIN:
+            return {"bool": lambda: bytes([v]), "uint": lambda: uint(v), "int": lambda: sint(v),
+                    "float": lambda: flt(v), "string": lambda: cstr(v)}[t]()
+        name, kind, fields = defs[index[t]]
+        if kind == 0:
+            return uint(dict(fields)[v])
+        if kind == 1:
+            return b"".join(enc(ft, v[fn]) for fn, ft in fields)
+        out = b""
+        for i, (fn, ft) in enumerate(fields):
+            if fn in v:
+                out += uint(i + 1) + enc(ft, v[fn])
+        return out + uint(0)
+
+    def guid(n):
+        return {"sessionID": 1, "localID": n}
+
+    def move(x, y):
+        return {"m00": 1.0, "m01": 0.0, "m02": float(x), "m10": 0.0, "m11": 1.0, "m12": float(y)}
+
+    white = {"type": "SOLID", "color": {"r": 1.0, "g": 1.0, "b": 1.0, "a": 1.0}, "opacity": 1.0, "visible": True}
+    red = dict(white, color={"r": 1.0, "g": 0.0, "b": 0.0, "a": 1.0})
+    path = bytes([1]) + struct.pack("<2f", 0, 0) + bytes([2]) + struct.pack("<2f", 100, 0) + bytes([2]) + struct.pack("<2f", 50, 80) + bytes([0])
+    nodes = [
+        {"guid": guid(0), "type": "DOCUMENT", "name": "Document"},
+        {"guid": guid(1), "parentIndex": {"guid": guid(0), "position": "!"}, "type": "CANVAS", "name": "Page 1"},
+        {"guid": guid(2), "parentIndex": {"guid": guid(1), "position": "!"}, "type": "FRAME", "name": "Scorebug",
+         "size": {"x": 3840.0, "y": 2160.0}, "transform": move(500, 500)},
+        {"guid": guid(3), "parentIndex": {"guid": guid(2), "position": "!"}, "type": "ROUNDED_RECTANGLE", "name": "Bar",
+         "size": {"x": 800.0, "y": 100.0}, "transform": move(200, 1800), "fillPaints": [red], "cornerRadius": 20.0},
+        {"guid": guid(4), "parentIndex": {"guid": guid(2), "position": "#"}, "type": "TEXT", "name": "Score",
+         "size": {"x": 200.0, "y": 80.0}, "transform": move(400, 1810), "fillPaints": [white], "fontSize": 64.0,
+         "textData": {"characters": "3 - 1"}, "fontName": {"family": "Bebas Neue", "style": "Regular", "postscript": "BebasNeue-Regular"}},
+        {"guid": guid(5), "parentIndex": {"guid": guid(2), "position": "$"}, "type": "VECTOR", "name": "Arrow",
+         "size": {"x": 100.0, "y": 80.0}, "transform": move(1200, 1800), "fillPaints": [white], "fillGeometry": [{"commandsBlob": 0}]},
+    ]
+    data = enc("Message", {"nodeChanges": nodes, "blobs": [{"bytes": path}]})
+    pack_ = lambda b: zlib.compress(b)[2:-4]
+    canvas = b"fig-kiwi" + struct.pack("<I", 15)
+    for chunk in (pack_(bytes(sch)), pack_(data)):
+        canvas += struct.pack("<I", len(chunk)) + chunk
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("canvas.fig", canvas)
+        z.writestr("meta.json", "{}")
+    return buf.getvalue()
+
+
 class StoreTests(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp()
@@ -142,12 +256,28 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(r["layers"][0]["w"], 1920)
         self.assertIn(r["layers"][0]["src"], self.store.assets(hud["id"]))
 
+    def test_import_figma(self):
+        hud = self.store.create("Bug", "other", {"layers": [], "vars": []})
+        r = designimport.import_design(self.store, hud["id"], "bug.fig", _fig_file())
+        by = {l["name"]: l for l in r["layers"]}
+        self.assertEqual(r["name"], "bug")
+        # Positions inside the frame, halved from 3840 wide.
+        self.assertEqual((by["Bar"]["type"], by["Bar"]["x"], by["Bar"]["y"], by["Bar"]["w"]), ("rect", 100, 900, 400))
+        self.assertEqual((by["Bar"]["fill"], by["Bar"]["radius"]), ("#ff0000", 10))
+        self.assertEqual((by["Score"]["type"], by["Score"]["text"], by["Score"]["size"]), ("text", "3 - 1", 32))
+        self.assertEqual(by["Arrow"]["type"], "image")
+        with open(self.store.asset_file(hud["id"], by["Arrow"]["src"][len("assets/"):]), encoding="utf-8") as f:
+            self.assertIn('d="M0 0 L100 0 L50 80 Z"', f.read())
+        self.assertEqual((by["Score"]["font"], r["fonts_missing"]), ("Bebas Neue", []))   # (one HUD Builder has)
+
     def test_import_refuses_other_files(self):
         hud = self.store.create("Bug", "other", {"layers": [], "vars": []})
         with self.assertRaises(ValueError):
             designimport.import_design(self.store, hud["id"], "x.sccgfx", b"not a zip")
         with self.assertRaises(ValueError):
             designimport.import_design(self.store, hud["id"], "x.psd", b"not a psd")
+        with self.assertRaises(ValueError):
+            designimport.import_design(self.store, hud["id"], "x.fig", b"not a fig")
 
 
 class ServerTests(unittest.TestCase):

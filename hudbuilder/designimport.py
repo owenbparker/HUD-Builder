@@ -34,7 +34,7 @@ from .store import ASSET_TYPES, FONT_TYPES, MAX_ASSET, new_id
 W, H = 1920, 1080
 BUILTIN_FONTS = {"inter", "montserrat", "barlow condensed", "bebas neue", "anton", "permanent marker", "vazirmatn"}
 ANIM_NONE = {"type": "none", "dur": 400, "delay": 0}
-DESIGN_TYPES = (".sccgfx", ".psd", ".psb", ".zip")
+DESIGN_TYPES = (".sccgfx", ".psd", ".psb", ".fig", ".zip")
 
 GENERIC = re.compile(r"^(layer|rectangle|ellipse|line|shape|group|polygon|path|vector|background|bg|color fill|"
                      r"gradient fill|pattern fill|brightness|levels|curves|hue|vibrance|exposure|copy)\b", re.I)
@@ -54,9 +54,11 @@ def import_design(store, hud_id, filename, blob):
     name = os.path.splitext(os.path.basename(filename or "Design"))[0] or "Design"
     if ext in (".psd", ".psb"):
         return _import_psd(store, hud_id, name, blob)
+    if ext == ".fig":
+        return _import_figma(store, hud_id, name, blob)
     if ext in (".sccgfx", ".zip"):
         return _import_gfx(store, hud_id, name, blob)
-    raise ValueError("Import takes a GFX Engine graphic (.sccgfx) or a Photoshop file (.psd)")
+    raise ValueError("Import takes a GFX Engine graphic (.sccgfx), a Photoshop file (.psd) or a Figma file (.fig)")
 
 
 # --- helpers -------------------------------------------------------------------------
@@ -129,6 +131,10 @@ def _scale(layers, k):
         for key in ("size", "radius", "strokeWidth", "skew"):
             if isinstance(layer.get(key), (int, float)):
                 layer[key] = round(layer[key] * k, 2)
+        if isinstance(layer.get("radii"), list):
+            layer["radii"] = [round((r or 0) * k, 2) for r in layer["radii"]]
+        if isinstance(layer.get("glow"), dict):
+            layer["glow"] = dict(layer["glow"], **{key: round((layer["glow"].get(key) or 0) * k, 2) for key in ("blur", "x", "y")})
 
 
 def _group(layers, name):
@@ -366,4 +372,33 @@ def _import_psd(store, hud_id, name, blob):
         notes.append(f"{skipped} layer{'s' if skipped != 1 else ''} couldn't be read and were left out")
     log(f"Imported {name} (Photoshop): {len(layers)} layers")
     return {"name": name, "layers": _group(layers, name), "vars": [], "fonts_missing": _missing_fonts(layers, known),
+            "linked": 0, "notes": notes}
+
+
+# --- Figma ----------------------------------------------------------------------------------------
+def _import_figma(store, hud_id, name, blob):
+    from . import figimport
+    comps, notes = figimport.import_fig(store, hud_id, name, blob)
+    layers = []
+    for i, (title, width, made) in enumerate(comps):
+        for layer in made:
+            for key in ("x", "y", "w", "h"):
+                layer[key] = round(layer[key])
+        _scale(made, W / width if width else 1)
+        if i:
+            for layer in made:
+                layer["visible"] = False
+        layers += _group(made, title)
+    if not layers:
+        raise ValueError("That Figma file has nothing to import")
+    widths = {round(w) for _, w, _ in comps}
+    if any(abs(w - W) > 1 for w in widths):
+        notes.insert(0, "Scaled to 1920 wide")
+    if len(comps) > 1:
+        notes.insert(0, f"{len(comps)} frames, one group each: the first is shown, the others are hidden")
+    known = _font_stems(store, hud_id)
+    _match_fonts(layers, known)
+    title = name     # (frame names are often "Frame 1": the file's name)
+    log(f"Imported {title} (Figma): {len(layers)} layers")
+    return {"name": title, "layers": layers, "vars": [], "fonts_missing": _missing_fonts(layers, known),
             "linked": 0, "notes": notes}
