@@ -270,6 +270,29 @@ class StoreTests(unittest.TestCase):
             self.assertIn('d="M0 0 L100 0 L50 80 Z"', f.read())
         self.assertEqual((by["Score"]["font"], r["fonts_missing"]), ("Bebas Neue", []))   # (one HUD Builder has)
 
+    def test_game_data(self):
+        from hudbuilder import enginefeed, gamedata
+        for game in gamedata.GAMES:
+            cat = gamedata.catalog(game)
+            tokens = [f["token"] for g in cat for f in g["fields"]]
+            self.assertEqual(len(tokens), len(set(tokens)), game)
+            self.assertTrue(any(f["guide"] for g in cat if g["table"] != "Global" for f in g["fields"]), game)
+        self.assertIn("{{League HUD!KILLS LEFT}}", [f["token"] for g in gamedata.catalog("lol") for f in g["fields"]])
+        self.assertEqual(gamedata.samples("lol")["Global"][0], ["Field", "Value"])
+        self.assertEqual(enginefeed.normalise(""), "http://127.0.0.1:8782")
+        self.assertEqual(enginefeed.normalise("192.168.1.20"), "http://192.168.1.20:8782")
+        # Pictures in the engine's tables get its address (or the HUD's, for what a HUD sends).
+        changes = []
+        feed = enginefeed.EngineFeed(lambda: "", lambda: changes.append(1))
+        feed._take("http://10.0.0.5:8782", {"feeds": {"League HUD": {"game": "lol"}}, "tables": {
+            "Global": [["Field", "Value"], ["Left logo", "global/left.png"], ["Left name", "Blue"]],
+            "League HUD": [["Field", "Value"], ["LOGO LEFT", "assets/logos/a.png"], ["KILLS LEFT", "4"]],
+            "HUDs": [["Field", "Value"], ["League HUD In-game HUD", "http://10.0.0.9:8777/overlay"]]}})
+        self.assertEqual(feed.tables["Global"][1][1], "http://10.0.0.5:8782/global/left.png")
+        self.assertEqual(feed.tables["League HUD"][1][1], "http://10.0.0.9:8777/assets/logos/a.png")
+        self.assertEqual(feed.tables["League HUD"][2][1], "4")
+        self.assertEqual(changes, [1])
+
     def test_import_refuses_other_files(self):
         hud = self.store.create("Bug", "other", {"layers": [], "vars": []})
         with self.assertRaises(ValueError):

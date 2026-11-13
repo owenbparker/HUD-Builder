@@ -47,6 +47,16 @@ The app checks for updates when it starts.
    - an on / off variable shows the layer only while it's on;
    - a number dropped on a shape makes it a bar that fills by that number.
    In text, mix words and variables: `GAME {{HUD!Game number}}`.
+   **Game data** (under Variables) is what the SCC game HUDs send: kills,
+   gold, round score, players... for the HUD's game, plus the teams from the
+   GFX Engine's Global. Drag one onto the canvas or a layer, like a variable.
+   It comes live from the SCC GFX Engine (Settings → GFX Engine; the one on
+   this PC by default) once the game's HUD is connected to it; until then the
+   editor shows example values.
+   **Setup guide** (Game data → Setup guide; it starts by itself after a
+   design is imported) asks for one piece at a time - "Which layer is the
+   left team's kills?" - and links the layer you click. It suggests layers
+   whose names match (KILLS LEFT, player1-kda, team logo left...).
 4. **Control panel.** Every variable gets a control: a text box, − / + for
    numbers, a switch, a colour or picture picker. **Hide HUD / Show HUD**
    plays the whole HUD out and back in. **Open in browser** opens the same

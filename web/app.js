@@ -73,15 +73,22 @@ window.App = (function () {
     const dlg = $("#new-dlg");
     $("#new-name").value = "";
     $("#new-game").replaceChildren(...Object.entries(state.games).map(([k, t]) => h("option", { value: k }, t)));
-    $("#new-template").replaceChildren(...Object.entries(state.templates).map(([k, t]) => h("option", { value: k }, t)));
+    $("#new-template").replaceChildren(...Object.entries(state.templates).map(([k, t]) => h("option", { value: k }, t)),
+      h("option", { value: "file" }, "My own design (.psd, .fig, .sccgfx)…"));
+    $("#new-file").value = "";
+    const fileShown = () => { const on = $("#new-template").value === "file"; $("#new-file-row").hidden = !on; $("#new-file-hint").hidden = !on; $("#new-file").required = on; };
+    $("#new-template").onchange = fileShown;
+    fileShown();
     dlg.returnValue = "";
     dlg.onclose = async () => {
       if (dlg.returnValue !== "ok") return;
       try {
-        const r = await api("/api/huds", { name: $("#new-name").value, game: $("#new-game").value, template: $("#new-template").value });
+        const file = $("#new-template").value === "file" ? $("#new-file").files[0] : null;
+        const r = await api("/api/huds", { name: $("#new-name").value, game: $("#new-game").value, template: file ? "blank" : $("#new-template").value });
         state = r.state;
         renderHuds();
-        openHud(r.hud.id, "design");
+        await openHud(r.hud.id, "design");
+        if (file) await Editor.importDesign(file);
       } catch (e) { toast(e.message, true); }
     };
     dlg.showModal();
@@ -100,6 +107,8 @@ window.App = (function () {
       if (r.notes && r.notes.length) msg += " " + r.notes.join(". ") + ".";
       if (r.fonts_missing && r.fonts_missing.length) msg += ` Fonts to add (Design > Text > Add font…): ${r.fonts_missing.join(", ")}.`;
       toast(msg, false, msg.length > 60 ? 9000 : 0);
+      // A design (not a whole HUD): open it and walk through linking it to the game's data.
+      if (!/\.scchud$/i.test(f.name)) { await openHud(r.hud.id, "design"); if (window.Guide) Guide.start({ fresh: true }); }
     } catch (err) { toast(err.message, true); }
   });
 
@@ -133,6 +142,11 @@ window.App = (function () {
       try { p = JSON.parse(e.data); } catch (err) { return; }
       if (p.gone) return closeHud();
       if (p.id !== current) return;
+      if (p.data_only) {
+        // (the game moved on: just the data)
+        if (hudLive) hudLive = Object.assign({}, hudLive, { tables: p.tables, engine: p.engine });
+        return Editor.liveData(p);
+      }
       hudLive = p;
       $("#nav-hud-name").textContent = p.name;
       Editor.liveUpdate(p);
@@ -172,11 +186,25 @@ window.App = (function () {
 
   // --- settings ------------------------------------------------------------------------------
   function renderSettings() {
+    const eng = state.app.engine || {};
+    const inp = $("#set-engine");
+    if (document.activeElement !== inp) inp.value = eng.setting || "";
+    const st = $("#set-engine-status");
+    st.textContent = eng.connected ? `● Connected to ${eng.name || "the GFX Engine"} at ${eng.url}` + (Object.keys(eng.feeds || {}).length ? `. Game HUDs sending: ${Object.keys(eng.feeds).join(", ")}` : ". No game HUD is sending to it yet.")
+      : (eng.error || "Not connected");
+    st.className = "small " + (eng.connected ? "ok" : "muted");
     $("#set-network").checked = !!state.app.network;
     $("#set-lan").textContent = state.app.lan_url ? `Other PCs use ${state.app.lan_url}` : "";
     $("#set-dir").textContent = state.app.data_dir;
     if (document.body.dataset.page === "live") renderLive();
   }
+  $("#set-engine-save").addEventListener("click", async () => {
+    const b = $("#set-engine-save");
+    b.disabled = true;
+    try { state = await api("/api/engine", { url: $("#set-engine").value }); renderSettings(); } catch (err) { toast(err.message, true); }
+    b.disabled = false;
+  });
+  setInterval(() => { if (document.body.dataset.page === "settings") refresh(); }, 4000);
   $("#set-network").addEventListener("change", async e => {
     try { state = await api("/api/network", { on: e.target.checked }); renderSettings(); } catch (err) { toast(err.message, true); }
   });

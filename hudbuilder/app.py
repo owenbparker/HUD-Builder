@@ -14,12 +14,15 @@ import os
 import re
 import socket
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from . import appearance, designimport, pack
 from .config import DATA_DIR, HUDS_DIR, web_file
 from .log import log, since
+from . import gamedata
+from .enginefeed import EngineFeed, normalise as engine_address
 from .store import GAMES, KINDS, Store, tables
 from .templates import TEMPLATES
 from .updater import Updater, clean_up_old_update
@@ -41,6 +44,20 @@ class HudBuilderApp:
         self.store = Store(huds_dir)
         self.updater = Updater()
         self.server = None
+        self.data_rev = 0      # goes up when the game data changes (the pages follow it)
+        self.engine = EngineFeed(lambda: self.config.get().get("engine_url", ""), self._data_changed)
+
+    def _data_changed(self):
+        self.data_rev += 1
+        self.store.changed()
+
+    def set_engine(self, url):
+        url = (url or "").strip()
+        if url:
+            engine_address(url)     # (raises on nonsense)
+        self.config.update({"engine_url": url})
+        self.engine.reconnect()
+        log(f"Game data from the GFX Engine at {engine_address(url)}")
 
     def host(self):
         cfg = self.config.get()
@@ -57,6 +74,7 @@ class HudBuilderApp:
         port = self.server.port if self.server else cfg["http_port"]
         lan = lan_ip() if cfg.get("allow_network") else None
         return {"port": port, "lan_url": f"http://{lan}:{port}" if lan else None, "network": bool(cfg.get("allow_network")),
+                "engine": dict(self.engine.status(), setting=cfg.get("engine_url", "")),
                 "update": self.updater.info(), "data_dir": DATA_DIR}
 
     def state(self):
@@ -65,11 +83,23 @@ class HudBuilderApp:
 
     def hud_payload(self, hud_id):
         hud = self.store.get(hud_id)
-        hud["tables"] = tables(hud)
+        hud["tables"] = dict(self.engine.tables, **tables(hud))
         hud["assets"] = self.store.assets(hud_id)
+        hud["engine"] = self.engine_brief()
         return hud
 
+    def engine_brief(self):
+        st = self.engine.status()
+        return {"connected": st["connected"], "name": st["name"], "url": st["url"], "error": st["error"],
+                "feeds": sorted(st["feeds"])}
+
+    def data_payload(self, hud_id):
+        """Just the data (the game moved on, the design didn't)."""
+        return {"id": hud_id, "data_only": True, "tables": dict(self.engine.tables, **tables(self.store.get(hud_id))),
+                "engine": self.engine_brief()}
+
     def stop(self):
+        self.engine.stop()
         if self.server:
             self.server.stop()
 
@@ -130,20 +160,23 @@ def make_handler(app):
             self.send_header("Connection", "close")
             self.end_headers()
             self.close_connection = True
-            rev, version = None, -1
+            rev, data_rev, version = None, None, -1
             try:
                 self.wfile.write(b"retry: 1000\n\n")
                 while True:
                     version = app.store.wait(version, 15)
                     try:
-                        hud = app.hud_payload(hud_id)
+                        hud = app.store.get(hud_id)
                     except KeyError:
                         self.wfile.write(b'data: {"gone": true}\n\n')
                         self.wfile.flush()
                         return
                     if hud["rev"] != rev:
-                        rev = hud["rev"]
-                        self.wfile.write(b"data: " + json.dumps(hud).encode("utf-8") + b"\n\n")
+                        rev, data_rev = hud["rev"], app.data_rev
+                        self.wfile.write(b"data: " + json.dumps(app.hud_payload(hud_id)).encode("utf-8") + b"\n\n")
+                    elif app.data_rev != data_rev:
+                        data_rev = app.data_rev
+                        self.wfile.write(b"data: " + json.dumps(app.data_payload(hud_id)).encode("utf-8") + b"\n\n")
                     else:
                         self.wfile.write(b": keep-alive\n\n")
                     self.wfile.flush()
@@ -188,6 +221,10 @@ def make_handler(app):
                     return self._file(full)
                 if path == "/api/state":
                     return self._json(app.state())
+                m = re.fullmatch(r"/api/gamedata/(\w+)", path)
+                if m:
+                    return self._json({"catalog": gamedata.catalog(m.group(1)), "samples": gamedata.samples(m.group(1)),
+                                       "source": gamedata.SOURCES.get(m.group(1), "")})
                 if path == "/api/log":
                     return self._json({"lines": since(int((q.get("after") or ["0"])[0]))})
                 m = re.fullmatch(r"/api/huds/" + ID, path)
@@ -281,6 +318,10 @@ def make_handler(app):
                 if path == "/api/network":
                     app.set_network(bool(body.get("on")))
                     return self._json(app.state())
+                if path == "/api/engine":
+                    app.set_engine(body.get("url"))
+                    time.sleep(1.2)     # (time to reach it, so the page shows how it went)
+                    return self._json(app.state())
                 if path == "/api/update/check":
                     app.updater.check()
                     return self._json(app.state())
@@ -324,6 +365,7 @@ def start(app):
     app.server = Server(app, app.host(), port)
     clean_up_old_update()
     app.updater.check_in_background()
+    app.engine.start()
     log(f"HUD Builder {app.updater.current} running - http://localhost:{port}/")
     return app.server
 

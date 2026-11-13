@@ -29,7 +29,7 @@
     Panel.render($("#panel"), hud, { local, onChange: draw });
   }
   const source = new EventSource(`/api/huds/${id}/stream`);
-  source.onmessage = e => { try { draw(JSON.parse(e.data)); } catch (err) { console.error(err); } };
+  source.onmessage = e => { try { const p = JSON.parse(e.data); if (!p.data_only) draw(p); } catch (err) { console.error(err); } };
 })();
 </script>
 </body>

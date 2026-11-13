@@ -47,7 +47,14 @@
     const key = JSON.stringify(list);
     if (key !== fontsKey) { fontsKey = key; GFX.loadFonts(list); }
   }
+  let last = null;
   function apply(hud) {
+    if (hud.data_only) {
+      // (just the data: the design is the last one)
+      if (!last) return;
+      hud = Object.assign({}, last, { tables: hud.tables });
+    }
+    last = hud;
     if (hud.gone) { if (root) { GFX.destroy(root); root.remove(); root = null; } return; }
     fonts(hud);
     GFX.setData(hud.tables);

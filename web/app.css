@@ -201,3 +201,29 @@ body.solo .panel-page { padding: 20px 22px; }
   .ctl-layout { grid-template-columns: 1fr; }
   .prow { grid-template-columns: 1fr; }
 }
+
+/* Game data (the GFX Engine) */
+.gamedata .hint { margin: 0 6px 6px; }
+.gamedata .hint.live::before { content: "●"; color: var(--x-green, #34c759); margin-right: 5px; }
+.data-tools { padding: 0 6px 6px; gap: 6px; }
+.data-tools input { flex: 1; min-width: 0; }
+.dgroup summary { cursor: pointer; padding: 5px 6px; font-size: 12px; font-weight: 600; color: var(--x-muted); list-style: none; }
+.dgroup summary::before { content: "▸ "; } .dgroup[open] summary::before { content: "▾ "; }
+.dgroup .vrow { padding-left: 14px; }
+.vval.linked { color: var(--x-accent); font-weight: 700; }
+.ed-canvas.picking, .ed-canvas.picking * { cursor: crosshair !important; }
+
+/* The setup guide */
+.guide { position: absolute; left: 16px; bottom: 16px; width: min(440px, calc(100% - 32px)); z-index: 20; padding: 14px 16px;
+  background: var(--x-surface); border: 1px solid var(--x-line); border-radius: 14px; box-shadow: 0 16px 50px rgba(0,0,0,.5); }
+.guide .g-top { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--x-muted); }
+.guide .g-bar { height: 4px; border-radius: 2px; background: var(--x-hover); margin: 8px 0 10px; overflow: hidden; }
+.guide .g-bar i { display: block; height: 100%; background: var(--x-accent); }
+.guide h4 { margin: 0 0 4px; font-size: 16px; }
+.guide p { margin: 4px 0; font-size: 13px; }
+.guide .g-suggest { display: flex; align-items: center; gap: 8px; margin: 8px 0; padding: 8px 10px; border-radius: 9px; background: var(--x-hover); font-size: 13px; }
+.guide .g-suggest b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.guide .g-btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.guide .g-done { color: var(--x-accent); font-weight: 600; }
+.guide .g-games { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+.small.ok { color: var(--x-green); }

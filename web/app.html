@@ -72,6 +72,8 @@
             <button class="tool small" id="ed-var-add" title="New variable">+</button></div>
           <p class="hint muted">Drag one onto the canvas, or onto a layer, to show it. Set them in the Control panel.</p>
           <div id="ed-var-list" class="var-list"></div>
+          <div class="ed-head"><h3>Game data</h3></div>
+          <div id="ed-gamedata" class="var-list gamedata"></div>
           <div class="ed-head"><h3>Built in</h3></div>
           <div id="ed-builtins" class="var-list"></div>
         </div>
@@ -121,6 +123,11 @@
   <section class="page" data-page="settings">
     <div class="page-head"><h2>Settings</h2></div>
     <div class="cards">
+      <div class="card"><h3>GFX Engine (game data)</h3>
+        <p class="muted small">The teams come from the SCC GFX Engine, and the game data from the game's SCC HUD connected to it (League, VALORANT, CoD, Rocket League, Smash, Overwatch).</p>
+        <div class="row-gap"><input id="set-engine" placeholder="This PC (127.0.0.1:8782)" aria-label="GFX Engine address"><button id="set-engine-save">Connect</button></div>
+        <p class="small" id="set-engine-status"></p>
+      </div>
       <div class="card"><h3>Network</h3>
         <label class="check"><input type="checkbox" id="set-network"> Let other PCs show the HUDs and use their control panels</label>
         <p class="muted small">Designing stays on this PC. Windows may ask to let HUD Builder through the firewall.</p>
@@ -143,6 +150,8 @@
     <label>Name<input id="new-name" required placeholder="e.g. Summer Cup scorebug"></label>
     <label>Game<select id="new-game"></select></label>
     <label>Start from<select id="new-template"></select></label>
+    <label id="new-file-row" hidden>Design file<input type="file" id="new-file" accept=".psd,.psb,.fig,.sccgfx,.zip"></label>
+    <p class="muted small" id="new-file-hint" hidden>A Photoshop (.psd), Figma (.fig) or GFX Engine (.sccgfx) design. Then a short guide links its layers to the game's data.</p>
     <div class="dlg-btns"><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="ok">Create</button></div>
   </form>
 </dialog>
@@ -169,6 +178,7 @@
 <script src="/update.js"></script>
 <script src="/panel.js"></script>
 <script src="/editor.js"></script>
+<script src="/guide.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

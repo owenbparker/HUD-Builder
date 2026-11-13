@@ -23,6 +23,9 @@ DEFAULTS = {
     # Other PCs on the network can show the HUDs (OBS / vMix on another PC)
     # and use their control panels.
     "allow_network": False,
+    # The SCC GFX Engine the game data comes from (the teams, and what the game
+    # HUDs send it); "" = the one on this PC.
+    "engine_url": "",
 }
 
 _lock = threading.Lock()

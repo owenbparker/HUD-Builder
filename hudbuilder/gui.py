@@ -42,7 +42,7 @@ def smoke_test(port):
     """Used by the build: check the packaged app serves its pages and can load
     its window library. Writes smoke-test.txt next to the app."""
     results, ok = [], True
-    for path in ("/", "/hud.html", "/control.html", "/app.js", "/editor.js", "/runtime.js", "/vendor/lottie.min.js",
+    for path in ("/", "/hud.html", "/control.html", "/app.js", "/editor.js", "/guide.js", "/runtime.js", "/vendor/lottie.min.js",
                  "/appearance.css", "/appearance.js", "/update.js", "/api/state", "/api/log", "/api/appearance",
                  "/fonts/Inter.ttf", "/fonts/BebasNeue.ttf", "/assets/app_icon.png"):
         try:

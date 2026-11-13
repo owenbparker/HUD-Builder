@@ -6,6 +6,9 @@
 "use strict";
 
 window.Editor = (function () {
+  let gd = { game: null, catalog: [], samples: {}, source: "" };   // the game's data (/api/gamedata)
+  let engine = { connected: false, feeds: [] };
+  let picker = null;           // the setup guide's "click the layer that…"
   let hud = null;              // {id, name, game, layers, vars}: our copy of the design
   let live = { tables: {}, assets: [] };
   let root = null;             // the HUD on the canvas
@@ -39,12 +42,43 @@ window.Editor = (function () {
     draw();
     renderAll();
     requestAnimationFrame(fitStage);
+    loadGameData();
   }
   function takeLive(payload) {
     live = { tables: payload.tables || {}, assets: payload.assets || [], values: payload.values || {} };
+    if (payload.engine) engine = payload.engine;
     loadFonts();
-    GFX.setData(live.tables);
+    GFX.setData(dataTables());
   }
+  // What the editor shows: the live data, and example values for what isn't live
+  // (so a design reads "12" and "BLU" rather than empty while no game is on).
+  const dataTables = () => Object.assign({}, gd.samples, live.tables);
+  // Just the data changed (the game moved on).
+  let dataTimer = null;
+  function liveData(payload) {
+    if (!hud || payload.id !== hud.id) return;
+    live.tables = payload.tables || {};
+    const was = JSON.stringify(engine);
+    if (payload.engine) engine = payload.engine;
+    if (JSON.stringify(engine) !== was) renderVars();
+    if (dataTimer) return;
+    dataTimer = setTimeout(() => { dataTimer = null; GFX.setData(dataTables()); redraw(); }, 100);
+  }
+  async function loadGameData() {
+    if (!hud) return;
+    const game = hud.game || "other";
+    if (gd.game === game) return;
+    try {
+      const r = await api(`/api/gamedata/${game}`);
+      if (!hud || (hud.game || "other") !== game) return;
+      gd = Object.assign({ game }, r);
+      GFX.setData(dataTables());
+      redraw();
+      renderVars();
+    } catch (e) { toast(e.message, true); }
+  }
+  const allData = () => gd.catalog.flatMap(g => g.fields.map(f => Object.assign({ group: g.group }, f)));
+  const dataOf = kinds => gd.catalog.map(g => [g, g.fields.filter(f => !kinds || kinds.includes(f.kind))]).filter(([, fs]) => fs.length);
   // From the app's live feed: the values (and pictures) as the control panel sets them.
   function liveUpdate(payload) {
     if (!hud || payload.id !== hud.id) return;
@@ -240,6 +274,11 @@ window.Editor = (function () {
     const handle = e.target.closest && e.target.closest(".handle");
     const list = sel();
     if (handle && list.length === 1) return startResize(e, list[0], handle.dataset.h);
+    if (picker) {
+      const l = hit(px, py);
+      if (l) { selected.clear(); selected.add(l.id); renderAll(); picker(l); }
+      return;
+    }
     const add = e.shiftKey || e.ctrlKey || e.metaKey;
     // Clicking inside the selection keeps it (to drag it, even over another layer).
     const inSel = list.length && !add && list.some(l => !l.locked && px >= l.x && px <= l.x + l.w && py >= l.y && py <= l.y + l.h);
@@ -458,6 +497,8 @@ window.Editor = (function () {
       if (r.notes.length) msg += " " + r.notes.join(". ") + ".";
       if (r.fonts_missing.length) msg += ` Fonts to add (Text > Add font…): ${r.fonts_missing.join(", ")}.`;
       toast(msg, false, r.fonts_missing.length || r.notes.length ? 9000 : 0);
+      // Then the walk through linking its layers to the game's data.
+      if (window.Guide) { await loadGameData(); Guide.start({ fresh: true }); }
     } catch (e) { toast(e.message, true); }
     finally { b.disabled = false; b.textContent = was; }
   }
@@ -474,6 +515,12 @@ window.Editor = (function () {
     const at = toCanvas(e.clientX, e.clientY);
     const name = e.dataTransfer.getData("text/x-hud-var");
     const builtin = e.dataTransfer.getData("text/x-hud-token");
+    const data = e.dataTransfer.getData("text/x-hud-data");
+    if (data) {
+      const f = allData().find(x => x.token === data);
+      const target = hit(at[0], at[1]);
+      if (f) return target ? linkData(target, f) : addLayers([layerFor(f)], at);
+    }
     if (name || builtin) {
       const target = hit(at[0], at[1]);
       if (name) return dropVar(vars().find(v => v.name === name), target, at);
@@ -545,7 +592,7 @@ window.Editor = (function () {
     const live = isLive(l);
     const r = h("div", { class: "lrow" + (selected.has(l.id) ? " sel" : "") + (inGroup ? " in" : "") + (l.reference ? " ref" : ""), draggable: true,
       dataset: { id: l.id },
-      onclick: ev => { pick(l, ev.ctrlKey || ev.metaKey || ev.shiftKey, true); renderAll(); } },
+      onclick: ev => { if (picker) { selected.clear(); selected.add(l.id); renderAll(); return picker(l); } pick(l, ev.ctrlKey || ev.metaKey || ev.shiftKey, true); renderAll(); } },
       eye([l], l.visible === false),
       h("span", { class: "lic" }, l.type === "rect" ? ({ ellipse: "◯", angled: "▱" }[l.shape] || "▭") : ICON[l.type] || "•"),
       h("span", { class: "lname", title: "Double-click to rename", ondblclick: ev => { ev.stopPropagation(); rename(l.name, val => { snapshot(); l.name = val; changed(); }); } }, l.name),
@@ -677,7 +724,7 @@ window.Editor = (function () {
   $("#ed-undo").addEventListener("click", doUndo);
   $("#ed-redo").addEventListener("click", doRedo);
   $("#ed-name").addEventListener("change", e => { snapshot(); hud.name = e.target.value.trim() || hud.name; e.target.value = hud.name; changed(); });
-  $("#ed-game").addEventListener("change", e => { snapshot(); hud.game = e.target.value; changed(); });
+  $("#ed-game").addEventListener("change", e => { snapshot(); hud.game = e.target.value; changed(); loadGameData(); });
   $("#ed-play").addEventListener("click", async () => {
     if (!root) return;
     const b = $("#ed-play");
@@ -848,7 +895,8 @@ window.Editor = (function () {
       l.text = area.value.slice(0, s) + t + area.value.slice(en);
       changed();
     } }, h("option", { value: "" }, "ƒ Insert a variable…"), vars().map(v => h("option", { value: v.name }, v.name)),
-      h("optgroup", { label: "Built in" }, BUILTINS.map(([t, n]) => h("option", { value: t }, n))));
+      h("optgroup", { label: "Built in" }, BUILTINS.map(([t, n]) => h("option", { value: t }, n))),
+      dataOf(["text", "number"]).map(([g, fs]) => h("optgroup", { label: "Game data: " + g.group }, fs.map(f => h("option", { value: f.token }, short(f))))));
     const file = h("input", { type: "file", hidden: true, accept: ".ttf,.otf,.woff,.woff2", onchange: async e => {
       const f = e.target.files[0];
       if (!f) return;
@@ -872,9 +920,14 @@ window.Editor = (function () {
   function liveProps(list) {
     const one = list.length === 1 ? list[0] : null;
     const each = fn => { snapshot(); list.forEach(fn); changed(); };
-    const opts = (kinds, val, first) => [h("option", { value: "" }, first), varsOf(kinds).map(v => h("option", { value: token(v.name), selected: token(v.name) === val }, v.name))];
+    const opts = (kinds, val, first) => {
+      const data = dataOf(kinds);
+      const known = varsOf(kinds).some(v => token(v.name) === val) || data.some(([, fs]) => fs.some(f => f.token === val));
+      return [h("option", { value: "" }, first), val && !known ? h("option", { value: val, selected: true }, val) : null,
+        varsOf(kinds).map(v => h("option", { value: token(v.name), selected: token(v.name) === val }, v.name)),
+        data.map(([g, fs]) => h("optgroup", { label: "Game data: " + g.group }, fs.map(f => h("option", { value: f.token, selected: f.token === val }, short(f)))))];
+    };
     const kids = [];
-    if (!vars().length) kids.push(h("p", { class: "muted small" }, "Make variables (Variables, +) to have this layer follow them."));
     if (one && (one.type === "rect" || one.type === "image")) {
       const m = one.meter;
       kids.push(lab("Fill by (a health or boost bar)", h("select", { onchange: e => each(l => { if (!e.target.value) delete l.meter; else l.meter = Object.assign({ max: "100", dir: "right" }, l.meter, { value: e.target.value }); }) },
@@ -896,7 +949,7 @@ window.Editor = (function () {
         h("select", { onchange: e => upd("op", e.target.value) }, (GFX.RULE_OPS || [["has", "is on / has a value"], ["empty", "is off / empty"], ["is", "is"], ["not", "is not"]]).map(([o, t]) => h("option", { value: o, selected: (r.op || "has") === o }, t))),
         ["has", "empty"].includes(r.op || "has") ? null : h("input", { value: r.to ?? "", placeholder: "value", onchange: e => upd("to", e.target.value) })));
     });
-    kids.push(lab(rules.length ? "And also when" : "Show only when", h("select", { onchange: e => { if (e.target.value) setRules([...rules, { value: e.target.value, op: "has" }]); } },
+    kids.push(lab(rules.length ? "And also when" : "Show only when", h("select", { onchange: e => { const v = e.target.value; if (!v) return; const f = allData().find(x => x.token === v); setRules([...rules, f && f.kind === "toggle" ? { value: v, op: "is", to: "1" } : { value: v, op: "has" }]); } },
       opts(null, "", rules.length ? "+ add another rule…" : "(always shown)"))));
     if (rules.length) kids.push(h("p", { class: "muted small" }, "The editor shows it either way. On air it plays its In and Out animations as the rule changes."));
     if (!one) kids.push(h("p", { class: "muted small" }, `${list.length} layers: their rules are set together.`));
@@ -955,6 +1008,7 @@ window.Editor = (function () {
     $("#ed-builtins").replaceChildren(...BUILTINS.map(([t, n]) => h("div", { class: "vrow", draggable: true,
       ondragstart: e => { e.dataTransfer.setData("text/x-hud-token", t); e.dataTransfer.effectAllowed = "copy"; } },
       h("span", { class: "vk" }, "⏱"), h("span", { class: "vname" }, n))));
+    renderGameData();
   }
   function editVar(v) {
     const dlg = $("#var-dlg");
@@ -1018,6 +1072,89 @@ window.Editor = (function () {
   }
   $("#ed-var-add").addEventListener("click", () => hud && editVar(null));
 
+  // --- game data (the GFX Engine: the teams, and what the game HUD sends) ----------------------
+  const KIND_ICON = { text: "Aa", number: "#", toggle: "◐", color: "●", image: "🖼" };
+  const strip = s => String(s || "").replace(/^(left|right) team's /, (m, side) => side[0].toUpperCase() + side.slice(1) + " ");
+  const short = f => strip(f.label).replace(/^./, c => c.toUpperCase()).replace(/ \(.*\)$/, "");
+  // A new layer showing it (dropped on empty canvas).
+  function layerFor(f) {
+    const name = short(f);
+    if (f.kind === "color") return newLayer("rect", { name, fill: f.token, w: 400, h: 16 });
+    if (f.kind === "image") return newLayer("image", { name, src: f.token, w: 160, h: 160 });
+    if (f.kind === "toggle") return newLayer("rect", { name, fill: "#ffffff", w: 40, h: 40, when: [{ value: f.token, op: "is", to: "1" }] });
+    if (f.kind === "number") return newLayer("text", { name, text: f.token, w: 160, h: 110, size: 88, align: "center", font: "Bebas Neue", weight: 400 });
+    return newLayer("text", { name, text: f.token, w: 480, h: 80 });
+  }
+  // Link a layer to it: the text shows it, the picture is it, the shape's colour,
+  // or (on / off data) the layer shows only while it's on. Returns what it did.
+  function linkData(l, f, quiet) {
+    snapshot();
+    let did;
+    if (f.kind === "toggle") {
+      const rules = (Array.isArray(l.when) ? l.when : l.when ? [l.when] : []).filter(r => r.value !== f.token);
+      l.when = [...rules, { value: f.token, op: "is", to: "1" }];
+      did = `${l.name} shows only while ${short(f).toLowerCase()} is on`;
+    } else if (f.kind === "image") {
+      if (l.type !== "image" && l.type !== "video") {
+        // (a placeholder shape or text becomes the picture, in the same box)
+        for (const k of ["fill", "fill2", "text", "radius", "radii", "stroke", "strokeWidth", "shape", "font", "size"]) delete l[k];
+        l.type = "image";
+      }
+      l.src = f.token;
+      l.fit = l.fit && l.fit !== "fill" ? l.fit : "contain";
+      did = `${l.name} shows the ${f.label}`;
+    } else if (f.kind === "color") {
+      if (l.type === "text") l.color = f.token;
+      else if (l.type === "rect") l.fill = f.token;
+      else { undo.pop(); if (!quiet) toast(`Pick a shape or text for the ${f.label}`, true); return null; }
+      did = `${l.name} is coloured by the ${f.label}`;
+    } else {
+      if (l.type !== "text") {
+        // (artwork of the text, flattened into a picture: it becomes live text in its place)
+        for (const k of ["src", "fit", "loop", "fill", "fill2", "radius", "radii", "stroke", "strokeWidth", "shape", "meter"]) delete l[k];
+        Object.assign(l, { type: "text", font: l.font || "Inter", size: Math.max(12, Math.round(l.h * 0.72)), color: l.color || "#ffffff",
+          align: "center", valign: "middle", tracking: 0, caps: false, lineHeight: 1, fit: "shrink", weight: 700, italic: false, scroll: 0 });
+      }
+      l.text = f.token;
+      did = `${l.name} shows the ${f.label}`;
+    }
+    selected.clear(); selected.add(l.id);
+    changed();
+    if (!quiet) toast(did);
+    return did;
+  }
+  const linkedTo = token => hud ? hud.layers.filter(l => JSON.stringify(l).includes(token.replace(/"/g, '\\"'))) : [];
+  let dataFilter = "";
+  const openGroups = new Set(["Teams"]);
+  function renderGameData() {
+    const box = $("#ed-gamedata");
+    if (!box) return;
+    if (!hud) return box.replaceChildren();
+    const status = engine.connected
+      ? (engine.feeds.includes(gd.source) || !gd.source ? `Live from ${engine.name || "the GFX Engine"}` : `GFX Engine connected; ${gd.source} isn't sending yet (showing examples)`)
+      : "No GFX Engine: showing examples (Settings > GFX Engine)";
+    const q = dataFilter.trim().toLowerCase();
+    const groups = gd.catalog.map(g => {
+      const fields = g.fields.filter(f => !q || (f.label + " " + f.field + " " + g.group).toLowerCase().includes(q));
+      if (!fields.length) return null;
+      const det = h("details", { class: "dgroup", open: !!q || openGroups.has(g.group),
+        ontoggle: e => { if (e.target.open) openGroups.add(g.group); else openGroups.delete(g.group); } },
+        h("summary", {}, g.group, h("span", { class: "muted small" }, g.table === "Global" ? " · GFX Engine" : "")),
+        fields.map(f => h("div", { class: "vrow", draggable: true, title: `${f.token}\nDrag onto the canvas or onto a layer, or pick a layer and click this.`,
+          ondragstart: e => { e.dataTransfer.setData("text/x-hud-data", f.token); e.dataTransfer.effectAllowed = "copy"; },
+          onclick: () => { const one = sel(); if (one.length === 1) linkData(one[0], f); else toast("Drag it onto the canvas, or pick a layer first and click it"); } },
+          h("span", { class: "vk" }, KIND_ICON[f.kind] || "?"), h("span", { class: "vname" }, short(f)),
+          linkedTo(f.token).length ? h("span", { class: "vval linked", title: "A layer shows this" }, "✓") : null)));
+      return det;
+    }).filter(Boolean);
+    box.replaceChildren(
+      h("p", { class: "hint muted" + (engine.connected ? " live" : "") }, status),
+      h("div", { class: "row-gap data-tools" },
+        h("input", { type: "search", placeholder: "Find…", value: dataFilter, oninput: e => { dataFilter = e.target.value; renderGameData(); const i = $("#ed-gamedata input[type=search]"); i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }),
+        h("button", { class: "small", title: "Go through the design one piece of game data at a time", onclick: () => window.Guide && Guide.start() }, "Setup guide")),
+      ...groups);
+  }
+
   function renderAll() {
     renderLayers();
     renderProps();
@@ -1026,7 +1163,15 @@ window.Editor = (function () {
   }
 
   return {
-    open, liveUpdate, flush, fit: fitStage,
+    open, liveUpdate, liveData, flush, fit: fitStage, importDesign,
+    get hud() { return hud; },
+    get catalog() { return gd.catalog; },
+    get engine() { return engine; },
+    linkData, linkedTo, short,
+    setGame(game) { if (!hud) return; snapshot(); hud.game = game; $("#ed-game").value = game; changed(); return loadGameData(); },
+    setPicker(fn) { picker = fn; canvas.classList.toggle("picking", !!fn); },
+    focusLayer(id) { selected.clear(); if (id) selected.add(id); renderAll(); },
+    unlink(layerJson) { const old = JSON.parse(layerJson); const i = hud.layers.findIndex(l => l.id === old.id); if (i < 0) return; snapshot(); hud.layers[i] = old; changed(); },
     get id() { return hud && hud.id; },
     close() { flush(); if (root) { GFX.destroy(root); root.remove(); root = null; } hud = null; selected.clear(); renderAll(); },
   };
