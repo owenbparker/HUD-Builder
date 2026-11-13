@@ -1,0 +1,2 @@
+# Desktop app extras (Windows). HUD Builder itself only needs Python's standard library.
+pywebview

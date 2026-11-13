@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HUD</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+  body.checker { background: repeating-conic-gradient(#2a2d31 0 25%, #1f2225 0 50%) 0 0 / 24px 24px; }
+  body.black { background: #000; }
+  body.green { background: #00b140; }
+  #stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+</style>
+</head>
+<body>
+<div id="stage" class="gfx-stage"></div>
+<script src="/vendor/lottie.min.js"></script>
+<script src="/runtime.js"></script>
+<script>
+// A HUD on air: 1920x1080 on transparent, scaled to the window (the OBS / vMix
+// browser source). It follows the HUD live: a change in the editor or the
+// control panel shows at once. Address options:
+//   ?bg=checker|black|green    a background, to look at it in a browser
+//   ?anim=0                    no In / Out animations (cut on and off)
+(function () {
+  "use strict";
+  const q = new URLSearchParams(location.search);
+  const id = location.pathname.split("/").filter(Boolean).pop();
+  const stage = document.getElementById("stage");
+  if (q.get("bg")) document.body.classList.add(q.get("bg"));
+  const animate = q.get("anim") !== "0";
+  GFX.base = "/huds/" + id;
+  function scale() {
+    const k = Math.min(innerWidth / GFX.W, innerHeight / GFX.H);
+    stage.style.transform = `translate(${(innerWidth - GFX.W * k) / 2}px, ${(innerHeight - GFX.H * k) / 2}px) scale(${k})`;
+  }
+  addEventListener("resize", scale);
+  scale();
+
+  let root = null, shown = null, fontsKey = "";
+  const onAir = hud => ({ id: hud.id, layers: (hud.layers || []).filter(l => !l.reference) });
+  function fonts(hud) {
+    const list = (hud.assets || []).filter(a => /\.(ttf|otf|woff2?)$/i.test(a)).map(p => {
+      const name = p.replace(/^assets\//, "").replace(/\.[^.]+$/, "");
+      return { path: p, postscript: name, aliases: [name] };
+    });
+    const key = JSON.stringify(list);
+    if (key !== fontsKey) { fontsKey = key; GFX.loadFonts(list); }
+  }
+  function apply(hud) {
+    if (hud.gone) { if (root) { GFX.destroy(root); root.remove(); root = null; } return; }
+    fonts(hud);
+    GFX.setData(hud.tables);
+    const comp = onAir(hud);
+    if (!root) {
+      root = GFX.buildComp(comp, {}, {});
+      stage.appendChild(root);
+    } else {
+      GFX.updateComp(root, comp, {});
+    }
+    const want = hud.shown !== false;
+    if (want !== shown) {
+      const first = shown === null;
+      shown = want;
+      if (!animate) { root.style.visibility = want ? "" : "hidden"; return; }
+      GFX.finish(root);
+      root.style.visibility = "";
+      if (want) {
+        // (the first time, once the fonts and pictures are in)
+        (first && document.fonts ? document.fonts.ready : Promise.resolve()).then(() => GFX.play(root, "in"));
+      } else if (first) {
+        root.style.visibility = "hidden";
+      } else {
+        GFX.play(root, "out").then(() => { if (!shown) root.style.visibility = "hidden"; });
+      }
+    }
+  }
+  const source = new EventSource(`/api/huds/${id}/stream`);
+  source.onmessage = e => { try { apply(JSON.parse(e.data)); } catch (err) { console.error(err); } };
+})();
+</script>
+</body>
+</html>

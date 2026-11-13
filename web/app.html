@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HUD Builder</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/appearance.css">
+<script src="/appearance.js"></script>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<nav id="side">
+  <div class="brand"><img src="/assets/app_icon.png" alt=""><div><b>HUD Builder</b><span>SCC</span></div></div>
+  <a class="nav" href="#/huds" data-page="huds"><svg viewBox="0 0 24 24"><path d="M3 4h8v7H3zM13 4h8v7h-8zM3 13h8v7H3zM13 13h8v7h-8z" fill="currentColor"/></svg><span>My HUDs</span></a>
+  <div class="nav-group" id="nav-hud" hidden>
+    <div class="nav-title" id="nav-hud-name"></div>
+    <a class="nav" href="#/design" data-page="design"><svg viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16zM14 6l3 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span>Design</span></a>
+    <a class="nav" href="#/control" data-page="control"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="16" cy="7" r="2.4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="8" cy="17" r="2.4" fill="none" stroke="currentColor" stroke-width="2"/></svg><span>Control panel</span></a>
+    <a class="nav" href="#/live" data-page="live"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="3" fill="currentColor" opacity=".35"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/></svg><span>Go live</span></a>
+  </div>
+  <div class="nav-sep"></div>
+  <a class="nav" href="#/settings" data-page="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2.2"/></svg><span>Settings</span></a>
+  <a class="nav" href="#/appearance" data-page="appearance"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3a9 9 0 010 18z" fill="currentColor"/></svg><span>Appearance</span></a>
+  <div class="side-foot"><span class="version" id="version"></span><button class="update check" id="update" hidden></button></div>
+</nav>
+
+<div id="content">
+  <!-- My HUDs -->
+  <section class="page" data-page="huds">
+    <div class="page-head"><h2>My HUDs</h2><span class="grow"></span>
+      <button id="import-btn">Import…</button><input type="file" id="import-file" accept=".scchud,.zip" hidden>
+      <button class="primary" id="new-btn">New HUD</button></div>
+    <div id="hud-grid" class="hud-grid"></div>
+  </section>
+
+  <!-- The editor -->
+  <section class="page editor" data-page="design">
+    <div class="ed-bar">
+      <input id="ed-name" class="ed-name" aria-label="HUD name">
+      <select id="ed-game" aria-label="Game"></select>
+      <span class="sep"></span>
+      <button class="tool" id="ed-undo" title="Undo (Ctrl+Z)">↶</button>
+      <button class="tool" id="ed-redo" title="Redo (Ctrl+Y)">↷</button>
+      <span class="sep"></span>
+      <div class="add-row" role="toolbar" aria-label="Add">
+        <button class="tool" data-add="rect" title="Rectangle"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="1.5" fill="currentColor"/></svg></button>
+        <button class="tool" data-add="ellipse" title="Ellipse"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8" ry="7" fill="currentColor"/></svg></button>
+        <button class="tool" data-add="angled" title="Angled bar"><svg viewBox="0 0 24 24"><path d="M7 7h14l-4 10H3z" fill="currentColor"/></svg></button>
+        <button class="tool" data-add="line" title="Line"><svg viewBox="0 0 24 24"><path d="M3 12h18" stroke="currentColor" stroke-width="3"/></svg></button>
+        <button class="tool" data-add="text" title="Text"><svg viewBox="0 0 24 24"><path d="M5 6h14M12 6v13" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button>
+        <button class="tool" data-add="image" title="Picture, video or Lottie (or drag files onto the canvas)"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 17l5-5 4 4 2-2 3 3" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="16" cy="9" r="1.6" fill="currentColor"/></svg></button>
+        <button class="tool" data-add="reference" title="Game screenshot to line things up with (never on air)"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2"/><path d="M8 12h8M12 8v8" stroke="currentColor" stroke-width="2"/></svg></button>
+        <input type="file" id="ed-file" accept="image/*,video/webm,video/mp4,.json,.ttf,.otf,.woff,.woff2" multiple hidden>
+      </div>
+      <span class="grow"></span>
+      <select id="ed-bg" aria-label="Canvas background"><option value="checker">Checkerboard</option><option value="black">Black</option><option value="green">Green</option><option value="grey">Grey</option></select>
+      <button id="ed-play" title="Play the In animations, then the Out">▶ Play</button>
+      <span id="ed-saved" class="saved muted">Saved</span>
+    </div>
+    <div class="ed-body">
+      <div class="ed-left">
+        <div class="ed-panel ed-layers">
+          <div class="ed-head"><h3>Layers</h3><span class="grow"></span>
+            <button class="tool small" id="ed-group" title="Group the selected layers (Ctrl+G)">Group</button></div>
+          <div id="ed-layer-list" class="layer-list"></div>
+        </div>
+        <div class="ed-panel ed-data">
+          <div class="ed-head"><h3>Variables</h3><span class="grow"></span>
+            <button class="tool small" id="ed-var-add" title="New variable">+</button></div>
+          <p class="hint muted">Drag one onto the canvas, or onto a layer, to show it. Set them in the Control panel.</p>
+          <div id="ed-var-list" class="var-list"></div>
+          <div class="ed-head"><h3>Built in</h3></div>
+          <div id="ed-builtins" class="var-list"></div>
+        </div>
+      </div>
+      <div class="ed-canvas" id="ed-canvas" tabindex="0">
+        <div id="ed-stage" class="gfx-stage"></div>
+        <div id="ed-sel"></div>
+        <div class="canvas-pos" id="ed-pos"></div>
+        <div class="canvas-empty" id="ed-empty" hidden>Add a shape, text or picture from the bar above, drag pictures in from your PC, or drag a variable here.</div>
+      </div>
+      <div class="ed-right ed-panel" id="ed-props"></div>
+    </div>
+  </section>
+
+  <!-- Control panel -->
+  <section class="page" data-page="control">
+    <div class="page-head"><h2>Control panel</h2><span class="grow"></span>
+      <button id="ctl-pop" title="Open this control panel in your browser (works on other PCs and phones too)">Open in browser</button></div>
+    <div class="ctl-layout">
+      <div id="ctl-panel" class="panel-page"></div>
+      <div class="ctl-preview"><div class="mini-out checker"><iframe id="ctl-frame" title="The HUD" tabindex="-1"></iframe></div><p class="muted">What's on air.</p></div>
+    </div>
+  </section>
+
+  <!-- Go live -->
+  <section class="page" data-page="live">
+    <div class="page-head"><h2>Go live</h2></div>
+    <div class="cards">
+      <div class="card"><h3>Browser source</h3>
+        <p class="muted">Add this to OBS or vMix as a browser source, 1920 × 1080. It follows the HUD live.</p>
+        <div class="link-row"><code id="live-url"></code><button id="live-copy">Copy</button></div>
+        <div class="link-row" id="live-lan-row" hidden><code id="live-lan"></code><button id="live-lan-copy">Copy</button></div>
+        <p class="muted small" id="live-lan-note">Only this PC can show it. For OBS on another PC, turn on <a href="#/settings">Let other PCs show the HUDs</a>.</p>
+      </div>
+      <div class="card"><h3>Control panel on another device</h3>
+        <p class="muted">Run the HUD from a laptop, tablet or phone on the same network.</p>
+        <div class="link-row"><code id="live-ctl"></code><button id="live-ctl-copy">Copy</button></div>
+      </div>
+      <div class="card"><h3>Share this HUD</h3>
+        <p class="muted">Save it as one .scchud file (design, pictures and fonts) to send to someone or open on another PC with Import.</p>
+        <button id="live-export">Export .scchud…</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Settings -->
+  <section class="page" data-page="settings">
+    <div class="page-head"><h2>Settings</h2></div>
+    <div class="cards">
+      <div class="card"><h3>Network</h3>
+        <label class="check"><input type="checkbox" id="set-network"> Let other PCs show the HUDs and use their control panels</label>
+        <p class="muted small">Designing stays on this PC. Windows may ask to let HUD Builder through the firewall.</p>
+        <p class="muted small" id="set-lan"></p>
+      </div>
+      <div class="card"><h3>Where your HUDs are</h3><p class="muted small"><code id="set-dir"></code></p></div>
+      <div class="card wide"><h3>Log</h3><pre id="log" class="log"></pre></div>
+    </div>
+  </section>
+
+  <section class="page" data-page="appearance">
+    <div class="page-head"><h2>Appearance</h2></div>
+    <div class="card"><div id="appearance-box"></div></div>
+  </section>
+</div>
+
+<dialog id="new-dlg" class="dlg">
+  <form method="dialog">
+    <h3>New HUD</h3>
+    <label>Name<input id="new-name" required placeholder="e.g. Summer Cup scorebug"></label>
+    <label>Game<select id="new-game"></select></label>
+    <label>Start from<select id="new-template"></select></label>
+    <div class="dlg-btns"><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="ok">Create</button></div>
+  </form>
+</dialog>
+
+<dialog id="var-dlg" class="dlg">
+  <form method="dialog">
+    <h3 id="var-title">Variable</h3>
+    <label>Name<input id="var-name" required placeholder="e.g. Left score"></label>
+    <label>Kind<select id="var-kind">
+      <option value="text">Text</option><option value="number">Number (with − / +)</option><option value="toggle">On / off</option>
+      <option value="color">Colour</option><option value="image">Picture</option><option value="choice">One of a list</option></select></label>
+    <label>Starting value<input id="var-value"></label>
+    <div class="var-num row3"><label>Step<input id="var-step" type="number" value="1"></label><label>Lowest<input id="var-min" type="number"></label><label>Highest<input id="var-max" type="number"></label></div>
+    <label class="var-choice">Choices (one a line)<textarea id="var-options" rows="4"></textarea></label>
+    <label>Section in the control panel<input id="var-group" placeholder="e.g. Left team (optional)"></label>
+    <div class="dlg-btns"><button value="delete" id="var-delete" class="danger" formnovalidate>Delete</button><span class="grow"></span>
+      <button value="cancel" formnovalidate>Cancel</button><button class="primary" value="ok">Save</button></div>
+  </form>
+</dialog>
+
+<script src="/vendor/lottie.min.js"></script>
+<script src="/runtime.js"></script>
+<script src="/ui.js"></script>
+<script src="/update.js"></script>
+<script src="/panel.js"></script>
+<script src="/editor.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

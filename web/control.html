@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HUD control</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/appearance.css">
+<script src="/appearance.js"></script>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body class="solo">
+<header class="solo-head"><img src="/assets/app_icon.png" alt=""><h1 id="name">HUD</h1><span class="muted">Control panel</span></header>
+<main id="panel" class="panel-page"></main>
+<script src="/ui.js"></script>
+<script src="/panel.js"></script>
+<script>
+// A HUD's control panel on its own page, for another PC, a tablet or a phone
+// (HUD Builder's "Let other PCs show the HUDs" must be on for those).
+(function () {
+  "use strict";
+  const id = location.pathname.split("/").filter(Boolean).pop();
+  const local = ["localhost", "127.0.0.1"].includes(location.hostname);
+  function draw(hud) {
+    if (hud.gone) { $("#panel").replaceChildren(h("p", { class: "muted" }, "This HUD was deleted.")); return; }
+    $("#name").textContent = hud.name;
+    document.title = hud.name + " - control";
+    const active = document.activeElement;
+    if (active && active.tagName === "INPUT" && active.type === "text" && $("#panel").contains(active)) return;   // (not while typing)
+    Panel.render($("#panel"), hud, { local, onChange: draw });
+  }
+  const source = new EventSource(`/api/huds/${id}/stream`);
+  source.onmessage = e => { try { draw(JSON.parse(e.data)); } catch (err) { console.error(err); } };
+})();
+</script>
+</body>
+</html>

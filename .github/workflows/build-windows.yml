@@ -1,0 +1,106 @@
+# Builds the HUD Builder desktop app (HUDBuilder.exe) on Windows and publishes it as
+# a GitHub release (v1.0.<run number>) with HUDBuilder-windows.zip. The app
+# checks the latest release on launch and offers to update itself. Each
+# release also gets SCC-HUD-Builder-Setup.exe, an installer that downloads the
+# latest release from GitHub when it runs.
+#
+# A commit with [no release] in its message builds and tests without publishing.
+#
+# Every run also leaves the zip on the run's summary page (Actions tab).
+name: Build Windows app
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      VERSION: v1.0.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller -r requirements-windows.txt
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Stamp the version
+        shell: pwsh
+        run: |
+          Set-Content hudbuilder/version.py "VERSION = `"$env:VERSION`"" -Encoding utf8
+          Get-Content hudbuilder/version.py
+
+      - name: Build HUDBuilder.exe
+        run: pyinstaller --noconfirm HUDBuilder.spec
+
+      - name: Smoke test the built app
+        shell: pwsh
+        run: |
+          $app = "dist\HUDBuilder"
+          $p = Start-Process "$app\HUDBuilder.exe" -ArgumentList '--smoke-test', '--port', '8801' -PassThru -Wait
+          Get-Content "$app\smoke-test.txt"
+          if ($p.ExitCode -ne 0) { throw "Smoke test failed (exit code $($p.ExitCode))" }
+          # Leave no test leftovers in the download.
+          Remove-Item "$app\smoke-test.txt", "$app\config.json" -ErrorAction SilentlyContinue
+          Remove-Item "$app\huds" -Recurse -ErrorAction SilentlyContinue
+          Remove-Item "$app\_update" -Recurse -ErrorAction SilentlyContinue
+
+      - name: Add readme and version.txt
+        shell: pwsh
+        run: |
+          Copy-Item README.md dist\HUDBuilder\
+          # (the SCC HUD Manager reads the installed version from it)
+          Set-Content dist\HUDBuilder\version.txt $env:VERSION -NoNewline
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HUDBuilder-windows
+          path: dist/HUDBuilder
+
+      - name: Build the installer
+        if: "!contains(github.event.head_commit.message, '[no release]')"
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y | Out-Null }
+          & $iscc "/DAppVersion=$($env:VERSION.TrimStart('v'))" installer\SCC-HUD-Builder.iss
+          if ($LASTEXITCODE) { exit 1 }
+
+      - name: Publish release
+        if: "!contains(github.event.head_commit.message, '[no release]')"
+        # The app zip and the installer go up together, so the latest release
+        # always has both (the installer link never 404s mid-build).
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist\HUDBuilder\* -DestinationPath HUDBuilder-windows.zip
+          $notes = git log -1 --format=%B | Where-Object { $_ -notmatch '^(Co-Authored-By|Claude-Session):' }
+          $notes = ($notes -join "`n").Trim()
+          gh release create "$env:VERSION" HUDBuilder-windows.zip dist\SCC-HUD-Builder-Setup.exe --target "${{ github.sha }}" --title "HUD Builder $env:VERSION" --notes "$notes"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Test the installer (silent; installs the release just published)
+        if: "!contains(github.event.head_commit.message, '[no release]')"
+        shell: pwsh
+        run: |
+          $dir = "$env:RUNNER_TEMP\SCC HUD Builder test"
+          $installArgs = '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=`"$dir`"", '/MERGETASKS="!desktopicon"', '/LOG=install.log'
+          $p = Start-Process dist\SCC-HUD-Builder-Setup.exe -ArgumentList $installArgs -PassThru -Wait
+          Get-Content install.log -Tail 25
+          if ($p.ExitCode -ne 0) { throw "Installer failed (exit code $($p.ExitCode))" }
+          if (-not (Test-Path "$dir\HUDBuilder.exe")) { throw "HUDBuilder.exe wasn't installed" }
+          if (-not (Test-Path "$dir\_internal")) { throw "_internal wasn't installed" }
+          Write-Host "Installed OK to $dir"

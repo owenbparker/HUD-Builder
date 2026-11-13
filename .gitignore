@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+config.json
+config.json.tmp
+
+sponsors/
+logos/
+smoke-test.txt
+overlay-test*
+_update/
+build/
+dist/
+appearance.json
+huds/
