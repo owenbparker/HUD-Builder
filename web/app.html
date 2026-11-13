@@ -10,7 +10,7 @@
 </head>
 <body>
 <nav id="side">
-  <div class="brand"><img src="/assets/app_icon.png" alt=""><div><b>HUD Builder</b><span>SCC</span></div></div>
+  <div class="brand"><img src="/assets/app_icon.png" alt=""><div><b>HUD Builder</b><span class="brand-sub">SCC</span></div></div>
   <a class="nav" href="#/huds" data-page="huds"><svg viewBox="0 0 24 24"><path d="M3 4h8v7H3zM13 4h8v7h-8zM3 13h8v7H3zM13 13h8v7h-8z" fill="currentColor"/></svg><span>My HUDs</span></a>
   <div class="nav-group" id="nav-hud" hidden>
     <div class="nav-title" id="nav-hud-name"></div>
@@ -123,7 +123,10 @@
   <section class="page" data-page="settings">
     <div class="page-head"><h2>Settings</h2></div>
     <div class="cards">
-      <div class="card"><h3>GFX Engine (game data)</h3>
+      <div class="card embed-only"><h3>Game data</h3>
+        <p class="muted small">Designs here read this HUD app's own data: its teams and the live game. Nothing else needs to run.</p>
+      </div>
+      <div class="card engine-card"><h3>GFX Engine (game data)</h3>
         <p class="muted small">The teams come from the SCC GFX Engine, and the game data from the game's SCC HUD connected to it (League, VALORANT, CoD, Rocket League, Smash, Overwatch).</p>
         <div class="row-gap"><input id="set-engine" placeholder="This PC (127.0.0.1:8782)" aria-label="GFX Engine address"><button id="set-engine-save">Connect</button></div>
         <p class="small" id="set-engine-status"></p>

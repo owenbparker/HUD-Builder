@@ -39,13 +39,20 @@ ID = r"([a-z0-9]{6,40})"
 
 
 class HudBuilderApp:
-    def __init__(self, config, huds_dir=HUDS_DIR):
+    def __init__(self, config, huds_dir=HUDS_DIR, embed=None, data_dir=DATA_DIR):
         self.config = config
         self.store = Store(huds_dir)
         self.updater = Updater()
+        self.data_dir = data_dir
+        # Built into a game HUD app (embed.py): its game, and its data instead of the GFX Engine's.
+        self.embed = embed
         self.server = None
         self.data_rev = 0      # goes up when the game data changes (the pages follow it)
-        self.engine = EngineFeed(lambda: self.config.get().get("engine_url", ""), self._data_changed)
+        if embed:
+            from .embed import LocalFeed
+            self.engine = LocalFeed(embed, self._data_changed)
+        else:
+            self.engine = EngineFeed(lambda: self.config.get().get("engine_url", ""), self._data_changed)
 
     def _data_changed(self):
         self.data_rev += 1
@@ -75,10 +82,11 @@ class HudBuilderApp:
         lan = lan_ip() if cfg.get("allow_network") else None
         return {"port": port, "lan_url": f"http://{lan}:{port}" if lan else None, "network": bool(cfg.get("allow_network")),
                 "engine": dict(self.engine.status(), setting=cfg.get("engine_url", "")),
-                "update": self.updater.info(), "data_dir": DATA_DIR}
+                "update": None if self.embed else self.updater.info(), "data_dir": self.data_dir}
 
     def state(self):
         return {"app": self.info(), "huds": self.store.list(), "games": GAMES, "kinds": KINDS,
+                "embed": {"game": self.embed["game"], "title": self.embed["title"], "host_url": self.engine.status()["url"]} if self.embed else None,
                 "templates": {k: v[0] for k, v in TEMPLATES.items()}}
 
     def hud_payload(self, hud_id):
@@ -199,7 +207,7 @@ def make_handler(app):
             url = urlparse(self.path)
             path = url.path
             q = parse_qs(url.query)
-            if appearance.handle(self, "GET", path, DATA_DIR):
+            if appearance.handle(self, "GET", path, app.data_dir):
                 return
             try:
                 if path in PAGES:
@@ -250,7 +258,7 @@ def make_handler(app):
         def do_POST(self):
             path = urlparse(self.path).path
             q = parse_qs(urlparse(self.path).query)
-            if appearance.handle(self, "POST", path, DATA_DIR):
+            if appearance.handle(self, "POST", path, app.data_dir):
                 return
             local = _is_local(self.client_address[0])
             try:
@@ -285,7 +293,7 @@ def make_handler(app):
                     blob = self._body()
                     if designimport.is_design(name) and not pack.is_hud(blob):
                         # A design from elsewhere: a new HUD made from it.
-                        hud = app.store.create(os.path.splitext(os.path.basename(name))[0], "other")
+                        hud = app.store.create(os.path.splitext(os.path.basename(name))[0], app.embed["game"] if app.embed else "other")
                         try:
                             out = designimport.import_design(app.store, hud["id"], name, blob)
                             hud = app.store.save_design(hud["id"], {"name": out["name"], "layers": out["layers"], "vars": out["vars"]})
@@ -299,7 +307,8 @@ def make_handler(app):
                 body = json.loads(self._body() or b"{}")
                 if path == "/api/huds":
                     template = TEMPLATES.get(body.get("template") or "blank", TEMPLATES["blank"])[1]()
-                    hud = app.store.create(body.get("name"), body.get("game") or "other", template)
+                    game = app.embed["game"] if app.embed else body.get("game") or "other"
+                    hud = app.store.create(body.get("name"), game, template)
                     log(f"New HUD: {hud['name']}")
                     return self._json({"hud": hud, "state": app.state()})
                 m = re.fullmatch(r"/api/huds/" + ID + r"/(save|delete|duplicate)", path)
@@ -364,9 +373,13 @@ def start(app):
     port = app.config.get()["http_port"]
     app.server = Server(app, app.host(), port)
     clean_up_old_update()
-    app.updater.check_in_background()
+    if not app.embed:
+        app.updater.check_in_background()
     app.engine.start()
-    log(f"HUD Builder {app.updater.current} running - http://localhost:{port}/")
+    if app.embed:
+        log(f"Custom design (HUD Builder) - http://localhost:{port}/")
+    else:
+        log(f"HUD Builder {app.updater.current} running - http://localhost:{port}/")
     return app.server
 
 

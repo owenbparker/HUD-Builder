@@ -13,6 +13,10 @@ FROZEN = getattr(sys, "frozen", False)
 RESOURCE_DIR = getattr(sys, "_MEIPASS", ROOT) if FROZEN else ROOT
 DATA_DIR = os.path.dirname(os.path.abspath(sys.executable)) if FROZEN else ROOT
 WEB_DIR = os.path.join(RESOURCE_DIR, "web")
+# (built into a game HUD app, its web folder travels inside the package: see embed.py)
+_PKG_WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
+if os.path.isdir(_PKG_WEB):
+    WEB_DIR = _PKG_WEB
 HUDS_DIR = os.path.join(DATA_DIR, "huds")
 CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
 

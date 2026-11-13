@@ -293,6 +293,22 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(feed.tables["League HUD"][2][1], "4")
         self.assertEqual(changes, [1])
 
+    def test_embedded_tables(self):
+        from hudbuilder import embed
+        snap = {"fields": {"KILLS LEFT": 5, "LOGO LEFT": "assets/logos/a.png"},
+                "series": {"left": {"name": "Blue", "short": "BLU", "score": 1, "logo": "assets/logos/a.png"},
+                           "right": {"name": "Red", "short": "RED", "score": 0}, "best_of": 3}}
+        t = embed.tables("League HUD", snap, "http://127.0.0.1:8777")
+        self.assertIn(["KILLS LEFT", "5"], t["League HUD"])
+        self.assertIn(["LOGO LEFT", "http://127.0.0.1:8777/assets/logos/a.png"], t["League HUD"])
+        g = dict(t["Global"][1:])
+        self.assertEqual((g["Left name"], g["Left won 1"], g["Right won 1"], g["Game box 2"], g["Game box 3"], g["Game"]),
+                         ("Blue", "1", "", "1", "", "2"))
+        self.assertEqual(g["Left logo"], "http://127.0.0.1:8777/assets/logos/a.png")
+        feed = embed.LocalFeed({"game": "lol", "title": "League HUD", "snapshot": lambda: snap, "host_url": ""}, lambda: None)
+        self.assertTrue(feed.read())
+        self.assertFalse(feed.read())   # (no change)
+
     def test_import_refuses_other_files(self):
         hud = self.store.create("Bug", "other", {"layers": [], "vars": []})
         with self.assertRaises(ValueError):

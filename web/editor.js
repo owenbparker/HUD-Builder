@@ -1130,7 +1130,7 @@ window.Editor = (function () {
     const box = $("#ed-gamedata");
     if (!box) return;
     if (!hud) return box.replaceChildren();
-    const status = engine.connected
+    const status = document.body.classList.contains("embedded") ? `Live from ${engine.name || "this HUD"}` : engine.connected
       ? (engine.feeds.includes(gd.source) || !gd.source ? `Live from ${engine.name || "the GFX Engine"}` : `GFX Engine connected; ${gd.source} isn't sending yet (showing examples)`)
       : "No GFX Engine: showing examples (Settings > GFX Engine)";
     const q = dataFilter.trim().toLowerCase();

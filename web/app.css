@@ -227,3 +227,6 @@ body.solo .panel-page { padding: 20px 22px; }
 .guide .g-done { color: var(--x-accent); font-weight: 600; }
 .guide .g-games { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
 .small.ok { color: var(--x-green); }
+.embed-only { display: none; }
+body.embedded .embed-only { display: block; }
+body.embedded .engine-card, body.embedded #ed-game { display: none !important; }

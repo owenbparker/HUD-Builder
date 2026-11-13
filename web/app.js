@@ -12,10 +12,20 @@ window.App = (function () {
   async function refresh() {
     try {
       state = await api("/api/state");
-      renderUpdate(state.app.update);
+      if (state.embed) embedded();
+      else renderUpdate(state.app.update);
       renderHuds();
       renderSettings();
     } catch (e) { toast(e.message, true); }
+  }
+
+  // Built into a game HUD app: its game only, its own data (no GFX Engine), its updates.
+  function embedded() {
+    document.body.classList.add("embedded");
+    $("#update").hidden = true;
+    $("#version").textContent = `In ${state.embed.title}`;
+    $(".brand-sub") && ($(".brand-sub").textContent = state.embed.title);
+    document.title = `Custom design · ${state.embed.title}`;
   }
 
   // --- pages ---------------------------------------------------------------------
@@ -73,6 +83,8 @@ window.App = (function () {
     const dlg = $("#new-dlg");
     $("#new-name").value = "";
     $("#new-game").replaceChildren(...Object.entries(state.games).map(([k, t]) => h("option", { value: k }, t)));
+    if (state.embed) $("#new-game").value = state.embed.game;
+    $("#new-game").disabled = !!state.embed;
     $("#new-template").replaceChildren(...Object.entries(state.templates).map(([k, t]) => h("option", { value: k }, t)),
       h("option", { value: "file" }, "My own design (.psd, .fig, .sccgfx)…"));
     $("#new-file").value = "";
