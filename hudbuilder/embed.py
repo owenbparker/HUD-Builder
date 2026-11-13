@@ -125,3 +125,21 @@ def start(game, title, snapshot, data_dir, port=None, host_url=""):
 
 def url(app):
     return f"http://localhost:{app.server.port}/" if app and app.server else ""
+
+
+def open_window(app, title="Custom design"):
+    """The Custom design page: a window of the app's own (pywebview), else the browser."""
+    address = url(app)
+    if not address:
+        raise ValueError("Custom design isn't running (its port may be taken: see the log)")
+    try:
+        import webview
+        if webview.windows:
+            webview.create_window(title, address, width=1440, height=900, min_size=(1100, 700),
+                                  background_color="#000000", text_select=True)
+            return address
+    except Exception as e:   # (no window library: the browser)
+        log(f"Custom design: opening it in the browser ({e!r})")
+    import webbrowser
+    webbrowser.open(address)
+    return address
