@@ -1139,7 +1139,7 @@ window.Editor = (function () {
       if (!fields.length) return null;
       const det = h("details", { class: "dgroup", open: !!q || openGroups.has(g.group),
         ontoggle: e => { if (e.target.open) openGroups.add(g.group); else openGroups.delete(g.group); } },
-        h("summary", {}, g.group, h("span", { class: "muted small" }, g.table === "Global" ? " · GFX Engine" : "")),
+        h("summary", {}, g.group, h("span", { class: "muted small" }, g.table === "Global" && !document.body.classList.contains("embedded") ? " · GFX Engine" : "")),
         fields.map(f => h("div", { class: "vrow", draggable: true, title: `${f.token}\nDrag onto the canvas or onto a layer, or pick a layer and click this.`,
           ondragstart: e => { e.dataTransfer.setData("text/x-hud-data", f.token); e.dataTransfer.effectAllowed = "copy"; },
           onclick: () => { const one = sel(); if (one.length === 1) linkData(one[0], f); else toast("Drag it onto the canvas, or pick a layer first and click it"); } },
