@@ -75,8 +75,13 @@
       }
     }
   }
-  const source = new EventSource(`/api/huds/${id}/stream`);
-  source.onmessage = e => { try { apply(JSON.parse(e.data)); } catch (err) { console.error(err); } };
+  if (new URLSearchParams(location.search).get("still") === "1") {
+    // (a picture on My HUDs: one read, so a long list doesn't hold every connection open)
+    fetch(`/api/huds/${id}`).then(r => r.json()).then(apply).catch(err => console.error(err));
+  } else {
+    const source = new EventSource(`/api/huds/${id}/stream`);
+    source.onmessage = e => { try { apply(JSON.parse(e.data)); } catch (err) { console.error(err); } };
+  }
 })();
 </script>
 </body>

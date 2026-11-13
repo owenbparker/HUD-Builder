@@ -76,8 +76,8 @@ html:is(:not([data-look]), [data-look="studio"]) .nav.on svg { color: #000; }
 .page.editor { padding: 0; display: flex; flex-direction: column; overflow: hidden; }
 .ed-bar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--x-line); background: var(--x-bar); flex: 0 0 auto; flex-wrap: wrap; }
 .ed-bar .sep { width: 1px; height: 22px; background: var(--x-line); margin: 0 4px; }
-.ed-bar select { width: auto; }
-.ed-name { width: 220px !important; font-weight: 600; }
+.ed-bar select { width: auto; max-width: 170px; }
+.ed-name { width: 190px !important; font-weight: 600; }
 .add-row { display: flex; gap: 4px; }
 .saved { font-size: 12px; min-width: 60px; text-align: right; }
 .saved.error { color: var(--x-red) !important; }

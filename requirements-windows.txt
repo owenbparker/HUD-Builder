@@ -1,2 +1,4 @@
-# Desktop app extras (Windows). HUD Builder itself only needs Python's standard library.
+# Desktop app extras (Windows). The rest of HUD Builder only needs Python's standard library.
 pywebview
+# Reading Photoshop files (Design > Import .psd)
+psd-tools

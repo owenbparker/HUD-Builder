@@ -8,10 +8,18 @@
 import os
 import sys
 
+from PyInstaller.utils.hooks import collect_all
+
 root = SPECPATH
 icon = os.path.join(root, "packaging", "icon.ico")
 
 hidden, datas = [], [(os.path.join(root, "web"), "web")]
+binaries = []
+# The PSD reader (Design > Import .psd) and its data files.
+d, b, h = collect_all("psd_tools")
+datas += d
+binaries += b
+hidden += h
 if sys.platform == "win32":
     # pywebview's Windows window (Edge WebView2) is loaded at runtime.
     hidden += ["webview.platforms.winforms", "webview.platforms.edgechromium", "clr"]
@@ -20,6 +28,7 @@ a = Analysis(
     [os.path.join(root, "HUDBuilder.py")],
     pathex=[root],
     datas=datas,
+    binaries=binaries,
     hiddenimports=hidden,
     excludes=["tkinter"],
 )

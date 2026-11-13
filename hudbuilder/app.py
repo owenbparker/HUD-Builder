@@ -17,7 +17,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-from . import appearance, pack
+from . import appearance, designimport, pack
 from .config import DATA_DIR, HUDS_DIR, web_file
 from .log import log, since
 from .store import GAMES, KINDS, Store, tables
@@ -236,8 +236,27 @@ def make_handler(app):
                     name = (q.get("name") or ["picture.png"])[0]
                     rel = app.store.add_asset(m.group(1), name, self._body())
                     return self._json({"path": rel, "assets": app.store.assets(m.group(1))})
+                m = re.fullmatch(r"/api/huds/" + ID + r"/import-design", path)
+                if m:
+                    # A GFX Engine graphic or a Photoshop file, for the editor to add.
+                    name = (q.get("name") or ["design.sccgfx"])[0]
+                    out = designimport.import_design(app.store, m.group(1), name, self._body())
+                    out["assets"] = app.store.assets(m.group(1))
+                    return self._json(out)
                 if path == "/api/import":
-                    hud = pack.import_(app.store, self._body())
+                    name = (q.get("name") or ["hud.scchud"])[0]
+                    blob = self._body()
+                    if designimport.is_design(name) and not pack.is_hud(blob):
+                        # A design from elsewhere: a new HUD made from it.
+                        hud = app.store.create(os.path.splitext(os.path.basename(name))[0], "other")
+                        try:
+                            out = designimport.import_design(app.store, hud["id"], name, blob)
+                            hud = app.store.save_design(hud["id"], {"name": out["name"], "layers": out["layers"], "vars": out["vars"]})
+                        except Exception:
+                            app.store.delete(hud["id"])
+                            raise
+                        return self._json({"hud": hud, "state": app.state(), "notes": out["notes"], "fonts_missing": out["fonts_missing"]})
+                    hud = pack.import_(app.store, blob)
                     log(f"Imported {hud['name']}")
                     return self._json({"hud": hud, "state": app.state()})
                 body = json.loads(self._body() or b"{}")

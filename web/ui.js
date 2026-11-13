@@ -38,13 +38,13 @@ async function api(path, body, raw) {
 }
 
 let toastTimer = null;
-function toast(text, error) {
+function toast(text, error, ms) {
   let t = $("#toast");
   if (!t) { t = h("div", { id: "toast", role: "status" }); document.body.appendChild(t); }
   t.textContent = text;
   t.className = error ? "show error" : "show";
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.className = ""; }, error ? 5000 : 2200);
+  toastTimer = setTimeout(() => { t.className = ""; }, ms || (error ? 6000 : Math.max(2200, text.length * 45)));
 }
 
 // A file from the user's PC as an ArrayBuffer.

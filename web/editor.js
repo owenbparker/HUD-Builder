@@ -430,6 +430,40 @@ window.Editor = (function () {
     } else addLayers(made, made.length === 1 ? at : null);
   }
 
+  // A GFX Engine graphic or a Photoshop file: its layers (and a graphic's
+  // fields, as variables) added to this HUD, as a group, in one undo step.
+  const DESIGN = /\.(sccgfx|psd|psb|zip)$/i;
+  async function importDesign(file) {
+    if (!hud) return toast("Open a HUD first", true);
+    const b = $("#ed-import");
+    b.disabled = true;
+    const was = b.textContent;
+    b.textContent = "Importing…";
+    try {
+      await flush();
+      const r = await api(`/api/huds/${hud.id}/import-design?name=${encodeURIComponent(file.name)}`, await readFile(file), true);
+      live.assets = r.assets;
+      loadFonts();
+      snapshot();
+      const have = new Set(vars().map(v => v.name.toLowerCase()));
+      const added = r.vars.filter(v => !have.has(v.name.toLowerCase()));
+      hud.vars.push(...added);
+      for (const l of r.layers) hud.layers.push(l);
+      selected.clear();
+      r.layers.forEach(l => selected.add(l.id));
+      changed({ vars: true });
+      const parts = [`Imported ${r.name}: ${r.layers.length} layer${r.layers.length === 1 ? "" : "s"}`];
+      if (added.length) parts.push(`${added.length} new variable${added.length === 1 ? "" : "s"} for the control panel`);
+      let msg = parts.join(", ") + ".";
+      if (r.notes.length) msg += " " + r.notes.join(". ") + ".";
+      if (r.fonts_missing.length) msg += ` Fonts to add (Text > Add font…): ${r.fonts_missing.join(", ")}.`;
+      toast(msg, false, r.fonts_missing.length || r.notes.length ? 9000 : 0);
+    } catch (e) { toast(e.message, true); }
+    finally { b.disabled = false; b.textContent = was; }
+  }
+  $("#ed-import").addEventListener("click", () => hud && $("#ed-import-file").click());
+  $("#ed-import-file").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; if (f) importDesign(f); });
+
   // Dropping files from the PC, or a variable from the list.
   canvas.addEventListener("dragover", e => { e.preventDefault(); canvas.classList.add("drop"); });
   canvas.addEventListener("dragleave", () => canvas.classList.remove("drop"));
@@ -446,7 +480,9 @@ window.Editor = (function () {
       return addLayers([newLayer("text", { name: builtin.replace(/[{}]/g, ""), text: builtin, w: 360, h: 80 })], at);
     }
     const files = [...(e.dataTransfer.files || [])];
-    if (files.length) await addFiles(files, at, false);
+    for (const f of files.filter(f => DESIGN.test(f.name))) await importDesign(f);
+    const media = files.filter(f => !DESIGN.test(f.name));
+    if (media.length) await addFiles(media, at, false);
   });
 
   // A variable dropped on a layer links it; on empty canvas it makes the layer that shows it.
@@ -894,7 +930,7 @@ window.Editor = (function () {
       h("div", { class: "props-head" }, h("h3", {}, hud.name), h("span", { class: "muted" }, games[hud.game] || "")),
       sect(null, h("p", { class: "muted" }, "Click a layer to change it. Shift or Ctrl+click picks more; drag on empty canvas to pick an area."),
         h("ul", { class: "keys muted small" },
-          h("li", {}, "Drag pictures, videos, Lottie files and fonts in from your PC"),
+          h("li", {}, "Drag pictures, videos, Lottie files, fonts, GFX Engine graphics (.sccgfx) and Photoshop files (.psd) in from your PC"),
           h("li", {}, "Arrow keys nudge (Shift: 10 px); Alt while dragging turns off snapping"),
           h("li", {}, "Ctrl+G groups, Ctrl+Shift+G ungroups; Alt+click picks one layer in a group"),
           h("li", {}, "Ctrl+D duplicates, Ctrl+] / Ctrl+[ bring forward / send back"),

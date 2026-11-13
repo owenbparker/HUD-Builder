@@ -26,6 +26,8 @@ import threading
 import time
 import uuid
 
+from . import fontnames
+
 GAMES = {
     "other": "Other game",
     "lol": "League of Legends",
@@ -36,6 +38,7 @@ GAMES = {
     "overwatch": "Overwatch 2",
 }
 KINDS = ("text", "number", "toggle", "color", "image", "choice")
+FONT_TYPES = {".ttf", ".otf", ".woff", ".woff2"}
 ASSET_TYPES = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".webm", ".mp4", ".json", ".ttf", ".otf", ".woff", ".woff2"}
 MAX_ASSET = 200 << 20
 
@@ -227,9 +230,11 @@ class Store:
             shutil.copytree(self.path(hud_id, "assets"), os.path.join(self.folder, new["id"], "assets"), dirs_exist_ok=True)
             return self._write(new)
 
-    def add_asset(self, hud_id, filename, blob):
-        """A picture (video, font...) for the HUD: saved in its assets, named
-        after the file (a different file with the same name gets a number)."""
+    def add_asset(self, hud_id, filename, blob, sub=""):
+        """A picture (video, font...) for the HUD: saved in its assets (in a
+        folder of them, sub), named after the file (a different file with the
+        same name gets a number). A font is named by its PostScript name, the
+        name a design (a Photoshop file) knows it by."""
         self.get(hud_id)
         stem, ext = os.path.splitext(os.path.basename(filename or "picture.png"))
         ext = ext.lower()
@@ -237,25 +242,40 @@ class Store:
             raise ValueError("Send a picture (PNG, JPG, WebP, GIF, SVG), a video (WebM, MP4), a Lottie .json or a font")
         if len(blob) > MAX_ASSET:
             raise ValueError("That file is too big (200 MB at most)")
+        if ext in FONT_TYPES:
+            stem = fontnames.names(blob).get("postscript") or stem
         stem = re.sub(r"[^A-Za-z0-9 _.-]+", "", stem).strip() or "file"
-        folder = self.path(hud_id, "assets")
+        sub = "/".join(p for p in (re.sub(r"[^A-Za-z0-9 _.-]+", "", x).strip(" .") for x in str(sub or "").split("/")) if p)
+        folder = self.path(hud_id, "assets", *([sub] if sub else []))
         os.makedirs(folder, exist_ok=True)
+        prefix = "assets/" + (sub + "/" if sub else "")
         name, n = stem + ext, 1
         while os.path.exists(os.path.join(folder, name)):
             with open(os.path.join(folder, name), "rb") as f:
                 if f.read() == blob:
-                    return "assets/" + name
+                    return prefix + name
             n += 1
             name = f"{stem} {n}{ext}"
         with open(os.path.join(folder, name), "wb") as f:
             f.write(blob)
-        return "assets/" + name
+        return prefix + name
 
     def assets(self, hud_id):
         folder = self.path(hud_id, "assets")
-        if not os.path.isdir(folder):
-            return []
-        return sorted("assets/" + n for n in os.listdir(folder) if os.path.isfile(os.path.join(folder, n)))
+        out = []
+        for dirpath, _, names in os.walk(folder):
+            for n in names:
+                rel = os.path.relpath(os.path.join(dirpath, n), folder).replace(os.sep, "/")
+                out.append("assets/" + rel)
+        return sorted(out)
+
+    def unique_folder(self, hud_id, name):
+        """A new folder name in the HUD's assets for an imported design's files."""
+        base = re.sub(r"[^A-Za-z0-9 _.-]+", "", name or "").strip(" .")[:60] or "Import"
+        out, n = base, 2
+        while os.path.exists(self.path(hud_id, "assets", out)):
+            out, n = f"{base} {n}", n + 1
+        return out
 
     def asset_file(self, hud_id, rel):
         """Path on disk of one of the HUD's assets (None if it climbs out or isn't there)."""

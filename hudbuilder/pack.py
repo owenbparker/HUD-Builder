@@ -29,6 +29,14 @@ def export(store, hud_id):
     return buf.getvalue()
 
 
+def is_hud(blob):
+    """A .scchud (a zip with hud.json in it)."""
+    try:
+        return "hud.json" in zipfile.ZipFile(io.BytesIO(blob)).namelist()
+    except (zipfile.BadZipFile, ValueError):
+        return False
+
+
 def import_(store, blob):
     """A .scchud file as a new HUD (its own copy, beside any it came from)."""
     if len(blob) > MAX_FILE:
@@ -48,16 +56,18 @@ def import_(store, blob):
     hud = store.create(clean_name(design.get("name"), "Imported HUD"),
                        design.get("game") if design.get("game") in GAMES else "other",
                        {"layers": design.get("layers") or [], "vars": [v for v in design.get("vars") or [] if isinstance(v, dict) and v.get("name")]})
+    base = os.path.normpath(store.path(hud["id"], "assets"))
     for info in z.infolist():
         name = info.filename.replace("\\", "/")
-        if not name.startswith("assets/") or info.is_dir() or "/" in name[len("assets/"):]:
+        if not name.startswith("assets/") or info.is_dir():
             continue
         if os.path.splitext(name)[1].lower() not in ASSET_TYPES or info.file_size > MAX_ASSET:
             continue
-        folder = store.path(hud["id"], "assets")
-        os.makedirs(folder, exist_ok=True)
-        base = os.path.basename(name)
-        with open(os.path.join(folder, base), "wb") as f:
+        dest = os.path.normpath(os.path.join(base, name[len("assets/"):]))
+        if not dest.startswith(base + os.sep):
+            continue     # (climbs out of the HUD's folder)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        with open(dest, "wb") as f:
             f.write(z.read(info))
     return store.get(hud["id"])
 

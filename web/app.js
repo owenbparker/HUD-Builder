@@ -23,7 +23,10 @@ window.App = (function () {
   function show(page) {
     if (HUD_PAGES.includes(page) && !current) page = "huds";
     if (!$(`.page[data-page="${page}"]`)) page = "huds";
-    if (document.body.dataset.page === "design" && page !== "design") Editor.flush();
+    const leaving = document.body.dataset.page;
+    if (leaving === "design" && page !== "design") Editor.flush();
+    // (My HUDs' pictures are read once, so read them again after an edit)
+    if (page === "huds" && leaving && leaving !== "huds") Promise.resolve(Editor.flush()).then(refresh);
     document.body.dataset.page = page;
     $$(".page").forEach(p => { p.hidden = p.dataset.page !== page; });
     $$("#side .nav").forEach(a => a.classList.toggle("on", a.dataset.page === page));
@@ -42,7 +45,7 @@ window.App = (function () {
     const grid = $("#hud-grid");
     const huds = state.huds || [];
     // (only when something on the cards changed: the previews are live pages)
-    const key = JSON.stringify([current, huds.map(s => [s.id, s.name, s.game, s.layers, s.vars])]);
+    const key = JSON.stringify([current, huds.map(s => [s.id, s.name, s.game, s.layers, s.vars, s.updated])]);
     if (key === gridKey) return;
     gridKey = key;
     if (!huds.length) {
@@ -53,7 +56,7 @@ window.App = (function () {
       return;
     }
     grid.replaceChildren(...huds.map(s => h("div", { class: "hud-card" + (s.id === current ? " open" : ""), onclick: () => openHud(s.id, "design") },
-      fitFrame(h("div", { class: "thumb checker" }, h("iframe", { src: `/hud/${s.id}?anim=0`, tabindex: -1, title: s.name, loading: "lazy" }))),
+      fitFrame(h("div", { class: "thumb checker" }, h("iframe", { src: `/hud/${s.id}?anim=0&still=1`, tabindex: -1, title: s.name, loading: "lazy" }))),
       h("div", { class: "hud-meta" },
         h("b", {}, s.name),
         h("span", { class: "muted small" }, `${state.games[s.game] || "Other game"} · ${s.layers} layers · ${s.vars} variables`)),
@@ -90,10 +93,13 @@ window.App = (function () {
     e.target.value = "";
     if (!f) return;
     try {
-      const r = await api("/api/import", await readFile(f), true);
+      const r = await api(`/api/import?name=${encodeURIComponent(f.name)}`, await readFile(f), true);
       state = r.state;
       renderHuds();
-      toast(`Imported ${r.hud.name}`);
+      let msg = `Imported ${r.hud.name}.`;
+      if (r.notes && r.notes.length) msg += " " + r.notes.join(". ") + ".";
+      if (r.fonts_missing && r.fonts_missing.length) msg += ` Fonts to add (Design > Text > Add font…): ${r.fonts_missing.join(", ")}.`;
+      toast(msg, false, msg.length > 60 ? 9000 : 0);
     } catch (err) { toast(err.message, true); }
   });
 

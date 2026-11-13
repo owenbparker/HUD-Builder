@@ -3,6 +3,7 @@
     python -m unittest discover -s tests -v
 """
 
+import io
 import json
 import os
 import shutil
@@ -11,10 +12,12 @@ import tempfile
 import unittest
 import urllib.error
 import urllib.request
+import zipfile
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
 
-from hudbuilder import pack  # noqa: E402
+from hudbuilder import designimport, fontnames, pack  # noqa: E402
 from hudbuilder.app import HudBuilderApp, start  # noqa: E402
 from hudbuilder.config import Config  # noqa: E402
 from hudbuilder.store import Store, tables  # noqa: E402
@@ -83,6 +86,68 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(copy["values"], {})      # values aren't shared
         with self.assertRaises(ValueError):
             pack.import_(self.store, b"not a zip")
+
+
+    def test_font_names(self):
+        with open(os.path.join(ROOT, "web", "fonts", "BebasNeue.ttf"), "rb") as f:
+            got = fontnames.names(f.read())
+        self.assertEqual(got.get("postscript"), "BebasNeue-Regular")
+        self.assertEqual(fontnames.names(b"not a font"), {})
+
+    def _sccgfx(self):
+        comp = {"name": "Scorebug", "width": 3840, "height": 2160, "layers": [
+            {"id": "a", "type": "text", "name": "Left name", "field": "Left team", "text": "BLUE", "x": 100, "y": 200, "w": 800, "h": 100, "font": "BebasNeue-Regular"},
+            {"id": "b", "type": "text", "name": "Event", "field": "Event", "text": "{{Global!Event}}", "x": 0, "y": 0, "w": 400, "h": 80},
+            {"id": "c", "type": "image", "name": "Logo", "src": "assets/logos/blue.png", "x": 0, "y": 0, "w": 200, "h": 200}]}
+        with open(os.path.join(ROOT, "web", "fonts", "BebasNeue.ttf"), "rb") as f:
+            font = f.read()
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z:
+            z.writestr("scc-gfx.json", json.dumps({"format": "scc-gfx", "compositions": [comp]}))
+            z.writestr("files/assets/logos/blue.png", b"\x89PNG fake")
+            z.writestr("files/library/BebasNeue.ttf", font)
+            z.writestr("files/assets/../../escape.png", b"x")
+        return buf.getvalue()
+
+    def test_import_sccgfx(self):
+        hud = self.store.create("Bug", "other", {"layers": [], "vars": []})
+        r = designimport.import_design(self.store, hud["id"], "bug.sccgfx", self._sccgfx())
+        flat = [c for l in r["layers"] for c in [l] + (l.get("children") or [])]
+        by = {l.get("name"): l for l in flat}
+        # A field becomes a HUD variable; one already reading Global keeps its link.
+        self.assertEqual([v["name"] for v in r["vars"]], ["Left team"])
+        self.assertEqual(by["Left name"]["text"], "{{HUD!Left team}}")
+        self.assertEqual(by["Event"]["text"], "{{Global!Event}}")
+        self.assertEqual(r["linked"], 1)
+        # Halved from 4K, pictures in the HUD's own assets, the font saved by its PostScript name.
+        self.assertEqual(by["Left name"]["w"], 400)
+        self.assertTrue(by["Logo"]["src"].startswith("assets/Scorebug/logos/"))
+        assets = self.store.assets(hud["id"])
+        self.assertIn(by["Logo"]["src"], assets)
+        self.assertIn("assets/BebasNeue-Regular.ttf", assets)
+        self.assertEqual(r["fonts_missing"], [])
+        self.assertFalse(os.path.exists(os.path.join(self.dir, "escape.png")))
+
+    def test_import_psd(self):
+        try:
+            from PIL import Image
+            from psd_tools import PSDImage
+        except ImportError:
+            self.skipTest("psd-tools isn't installed")
+        buf = io.BytesIO()
+        PSDImage.frompil(Image.new("RGBA", (3840, 2160), (255, 0, 0, 255))).save(buf)
+        hud = self.store.create("Bug", "other", {"layers": [], "vars": []})
+        r = designimport.import_design(self.store, hud["id"], "overlay.psd", buf.getvalue())
+        self.assertEqual(len(r["layers"]), 1)
+        self.assertEqual(r["layers"][0]["w"], 1920)
+        self.assertIn(r["layers"][0]["src"], self.store.assets(hud["id"]))
+
+    def test_import_refuses_other_files(self):
+        hud = self.store.create("Bug", "other", {"layers": [], "vars": []})
+        with self.assertRaises(ValueError):
+            designimport.import_design(self.store, hud["id"], "x.sccgfx", b"not a zip")
+        with self.assertRaises(ValueError):
+            designimport.import_design(self.store, hud["id"], "x.psd", b"not a psd")
 
 
 class ServerTests(unittest.TestCase):

@@ -59,6 +59,12 @@ def smoke_test(port):
     except Exception as e:
         ok = False
         results.append(f"FAIL window library: {e!r}")
+    try:
+        from psd_tools import PSDImage  # noqa: F401
+        results.append("OK   PSD reader")
+    except Exception as e:
+        ok = False
+        results.append(f"FAIL PSD reader: {e!r}")
     with open(os.path.join(DATA_DIR, "smoke-test.txt"), "w", encoding="utf-8") as f:
         f.write("\n".join(results + ["PASSED" if ok else "FAILED"]) + "\n")
     return ok
