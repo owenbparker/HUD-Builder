@@ -337,6 +337,9 @@ def make_handler(app):
                 if path == "/api/update/install":
                     app.updater.install_in_background()
                     return self._json(app.state())
+                if path == "/api/update/rollback":
+                    app.updater.rollback_in_background()
+                    return self._json(app.state())
                 return self._json({"error": "not found"}, 404)
             except KeyError as e:
                 self._json({"error": str(e).strip("'")}, 404)
